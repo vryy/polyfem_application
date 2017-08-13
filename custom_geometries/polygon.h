@@ -232,12 +232,27 @@ public:
 
     GeometryData::KratosGeometryFamily GetGeometryFamily()
     {
-        return GeometryData::Kratos_generic_family;
+        return GeometryData::Kratos_Polygon;
     }
 
     GeometryData::KratosGeometryType GetGeometryType()
     {
-        return GeometryData::Kratos_generic_type;
+        if(TnVertices == 3)
+            return GeometryData::Kratos_Tritagon;
+        else if(TnVertices == 4)
+            return GeometryData::Kratos_Tetragon;
+        else if(TnVertices == 5)
+            return GeometryData::Kratos_Pentagon;
+        else if(TnVertices == 6)
+            return GeometryData::Kratos_Hexagon;
+        else if(TnVertices == 7)
+            return GeometryData::Kratos_Heptagon;
+        else if(TnVertices == 8)
+            return GeometryData::Kratos_Octagon;
+        else if(TnVertices == 9)
+            return GeometryData::Kratos_Nonagon;
+        else if(TnVertices == 10)
+            return GeometryData::Kratos_Decagon;
     }
 
     ///@}
