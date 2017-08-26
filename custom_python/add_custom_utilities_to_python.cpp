@@ -13,6 +13,9 @@
 #include "includes/element.h"
 #include "custom_python/add_custom_utilities_to_python.h"
 #include "custom_utilities/polyfem_utility.h"
+#include "custom_utilities/poly_half_edge.h"
+#include "custom_utilities/polytree_2d.h"
+#include "custom_utilities/polytree_utility.h"
 
 
 namespace Kratos
@@ -49,6 +52,61 @@ void PolyFEMUtility_AddElement(PolyFEMUtility& rDummy, ModelPart::ElementsContai
     rDummy.AddElement(rpElements, pElement);
 }
 
+//////////////////////////////////////
+
+template<std::size_t TDim>
+std::size_t PolyVertex_Id(PolyVertex<TDim>& dummy)
+{
+    return dummy.Id();
+}
+
+template<std::size_t TDim>
+void PolyVertex_setitem(PolyVertex<TDim>& dummy, int index, double value)
+{
+    if (index >= 0 && index < dummy.size())
+    {
+        dummy[index] = value;
+    }
+    else
+    {
+        PyErr_SetString(PyExc_IndexError, "PolyVertex: index out of range");
+        throw_error_already_set();
+    }
+}
+
+template<std::size_t TDim>
+double PolyVertex_getitem(PolyVertex<TDim>& dummy, int index)
+{
+    if (index >= 0 && index < dummy.size())
+    {
+        return dummy[index];
+    }
+    else
+    {
+        PyErr_SetString(PyExc_IndexError, "PolyVertex: index out of range");
+        throw_error_already_set();
+    }
+}
+
+template<std::size_t TDim>
+std::size_t PolyHalfEdge_Id(PolyHalfEdge<TDim>& dummy)
+{
+    return dummy.Id();
+}
+
+template<std::size_t TDim>
+std::size_t PolyHalfEdge_HashCode(PolyHalfEdge<TDim>& dummy)
+{
+    return PolyHash<TDim>{}(dummy);
+}
+
+template<std::size_t TDim>
+std::size_t PolyFace_HashCode(PolyFace<TDim>& dummy)
+{
+    return PolyHash<TDim>{}(dummy);
+}
+
+
 void PolyFEMApplication_AddCustomUtilitiesToPython()
 {
     Condition::Pointer(PolyFEMUtility::*pointer_to_PyCreateCondition)(ModelPart&, const std::string&,
@@ -80,6 +138,53 @@ void PolyFEMApplication_AddCustomUtilitiesToPython()
     .def("TestPolygonShapeFunction", &PolyFEMUtility::TestPolygonShapeFunction)
     .def("TestPolygonQuadrature", &PolyFEMUtility::TestPolygonQuadrature)
     ;
+
+    //////////////////////////////////////////////////////////////////////////
+
+    class_<PolyVertex<2>, PolyVertex<2>::Pointer, boost::noncopyable>
+    ("PolyVertex2D", init<const std::size_t&, const double&, const double&>())
+    .def("Id", &PolyVertex_Id<2>)
+    .def("__getitem__", &PolyVertex_getitem<2>)
+     .def("__setitem__", &PolyVertex_setitem<2>)
+    .def(self_ns::str(self))
+    ;
+
+    class_<PolyVertex<3>, PolyVertex<3>::Pointer, boost::noncopyable>
+    ("PolyVertex3D", init<const std::size_t&, const double&, const double&, const double&>())
+    .def("Id", &PolyVertex_Id<3>)
+    .def("__getitem__", &PolyVertex_getitem<3>)
+     .def("__setitem__", &PolyVertex_setitem<3>)
+    .def(self_ns::str(self))
+    ;
+
+    class_<PolyHalfEdge<2>, PolyHalfEdge<2>::Pointer, boost::noncopyable>
+    ("PolyHalfEdge2D", init<PolyHalfEdge<2>::NodeType::Pointer, PolyHalfEdge<2>::NodeType::Pointer>())
+    .def("HashCode", &PolyHalfEdge_HashCode<2>)
+    .def(self_ns::str(self))
+    ;
+
+    class_<PolyFace<2>, PolyFace<2>::Pointer, boost::noncopyable>
+    ("PolyFace2D", init<const std::size_t&>())
+    .def("HashCode", &PolyFace_HashCode<2>)
+    .def(self_ns::str(self))
+    ;
+
+    class_<PolyTree2D, PolyTree2D::Pointer, boost::noncopyable>
+    ("PolyTree2D", init<>())
+    .def("Synchronize", &PolyTree2D::Synchronize)
+    .def(self_ns::str(self))
+    ;
+
+    //////////////////////////////////////////////////////////////////////////
+
+    class_<PolyTreeUtility, PolyTreeUtility::Pointer, boost::noncopyable>
+    ("PolyTreeUtility", init<>())
+    .def("TestComputeVoronoiTesselation", &PolyTreeUtility::TestComputeVoronoiTesselation)
+    .def("TestComputeReflectionPoints", &PolyTreeUtility::TestComputeReflectionPoints)
+    .def("TestPolygonDecomposition", &PolyTreeUtility::TestPolygonDecomposition)
+    .def(self_ns::str(self))
+    ;
+
 }
 
 }  // namespace Python.

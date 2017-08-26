@@ -9,19 +9,19 @@ include_directories( ${CMAKE_SOURCE_DIR}/applications )
 #######################################################################
 
 ######### add additional cmake module path
-# set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/applications/distributed_builders_application/custom_cmake_modules")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/custom_cmake_modules")
 #######################################################################
 
-######### add additional libraries
-# IF(DEFINED PETSC_DIR)
-#    SET(PETSC_EXECUTABLE_RUNS "YES") #skip the test
-#    FIND_PACKAGE(PETSc REQUIRED)
-#    IF(NOT ${PETSC_FOUND})
-#        message(ERROR "PETSc is required for PartiallySaturatedSoilApplication")
-#    ENDIF()
-#    INCLUDE_DIRECTORIES(${PETSC_INCLUDES})
-# ENDIF()
+FIND_PACKAGE(Qhull)
 
+if(${QHULL_FOUND} MATCHES TRUE)
+    message("Qhull is found: " ${QHULL_LIBRARIES})
+    message("Qhull reentrant is found: " ${QHULL_REENTRANT_LIBRARIES})
+    message("Qhull headers: " ${QHULL_HEADER})
+    message("Qhull include dir: " ${QHULL_INCLUDE_DIR})
+    include_directories(${QHULL_INCLUDE_DIR})
+    add_definitions(-DPOLYFEM_USE_QHULL)
+endif()
 
 ## generate variables with the sources
 set( KRATOS_POLYFEM_APPLICATION_SOURCES     
@@ -37,8 +37,9 @@ set( KRATOS_POLYFEM_APPLICATION_SOURCES
 add_library(KratosPolyFEMApplication SHARED ${KRATOS_POLYFEM_APPLICATION_SOURCES})
 
 target_link_libraries(KratosPolyFEMApplication KratosCore)
-# target_link_libraries(KratosPolyFEMApplication ${PETSC_LIBRARIES})
-# target_link_libraries(KratosPolyFEMApplication ${MPI_CXX_LIBRARY} ${MPI_C_LIBRARY})
+if(${QHULL_FOUND} MATCHES TRUE)
+    target_link_libraries(KratosPolyFEMApplication ${QHULL_REENTRANT_LIBRARIES})
+endif(${QHULL_FOUND} MATCHES TRUE)
 set_target_properties(KratosPolyFEMApplication PROPERTIES PREFIX "")
 install(TARGETS KratosPolyFEMApplication DESTINATION libs )
 
