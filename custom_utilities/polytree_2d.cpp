@@ -1241,12 +1241,6 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
                 }
             }
 
-            // re-set the sub-edges for forward edge
-            pEdge->SetSubEdges(pForwardEdges);
-
-            // re-set the sub-edges for the reversed edge
-            pOppositeEdge->SetSubEdges(pReverseEdges);
-
             #ifdef DEBUG_REFINE
             std::cout << "     list of forward edges (only half-edges, no composite):" << std::endl;
             for (std::size_t i = 0; i < pForwardEdges.size(); ++i)
@@ -1257,7 +1251,64 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             #endif
 
             #ifdef DEBUG_REFINE
+            std::cout << "     The edge is " << *pEdge << std::endl;
+            std::cout << "     The opposite edge is " << *pOppositeEdge << std::endl;
+            #endif
+
+            // turn the original sub-edges to composite if needed
+            for (std::size_t i = 0; i < pEdge->NumberOfSubEdges(); ++i)
+            {
+                if (pEdge->pSubEdge(i)->pOppositeEdge() != NULL)
+                {
+                    if (pEdge->pSubEdge(i)->IsComposite() && !pEdge->pSubEdge(i)->pOppositeEdge()->IsComposite())
+                    {
+                        std::vector<EdgeType::Pointer> pTmpEdges;
+                        for (std::size_t j = pEdge->pSubEdge(i)->NumberOfSubEdges(); j > 0; --j)
+                        {
+                            pTmpEdges.push_back(pEdge->pSubEdge(i)->pSubEdge(j-1)->pOppositeEdge());
+                        }
+                        #ifdef DEBUG_REFINE
+                        std::cout << "     " << *pEdge->pSubEdge(i)->pOppositeEdge() << " turns to composite:";
+                        #endif
+                        pEdge->pSubEdge(i)->pOppositeEdge()->SetSubEdges(pTmpEdges);
+                        #ifdef DEBUG_REFINE
+                        std::cout << " " << *pEdge->pSubEdge(i)->pOppositeEdge() << std::endl;
+                        #endif
+                    }
+                }
+            }
+
+            for (std::size_t i = 0; i < pOppositeEdge->NumberOfSubEdges(); ++i)
+            {
+                if (pOppositeEdge->pSubEdge(i)->pOppositeEdge() != NULL)
+                {
+                    if (pOppositeEdge->pSubEdge(i)->IsComposite() && !pOppositeEdge->pSubEdge(i)->pOppositeEdge()->IsComposite())
+                    {
+                        std::vector<EdgeType::Pointer> pTmpEdges;
+                        for (std::size_t j = pOppositeEdge->pSubEdge(i)->NumberOfSubEdges(); j > 0; --j)
+                        {
+                            pTmpEdges.push_back(pOppositeEdge->pSubEdge(i)->pSubEdge(j-1)->pOppositeEdge());
+                        }
+                        #ifdef DEBUG_REFINE
+                        std::cout << "     " << *pOppositeEdge->pSubEdge(i)->pOppositeEdge() << " turns to composite:";
+                        #endif
+                        pOppositeEdge->pSubEdge(i)->pOppositeEdge()->SetSubEdges(pTmpEdges);
+                        #ifdef DEBUG_REFINE
+                        std::cout << " " << *pOppositeEdge->pSubEdge(i)->pOppositeEdge() << std::endl;
+                        #endif
+                    }
+                }
+            }
+
+            // re-set the sub-edges for forward edge
+            pEdge->SetSubEdges(pForwardEdges);
+
+            // re-set the sub-edges for the reversed edge
+            pOppositeEdge->SetSubEdges(pReverseEdges);
+
+            #ifdef DEBUG_REFINE
             std::cout << "     The edge now is " << *pEdge << std::endl;
+            std::cout << "     The opposite edge now is " << *pOppositeEdge << std::endl;
             #endif
         }
         else
