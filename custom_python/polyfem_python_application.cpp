@@ -36,6 +36,9 @@ namespace Python
 
         PolyFEMApplication_AddCustomUtilitiesToPython();
 
+        KRATOS_REGISTER_IN_PYTHON_VARIABLE( POLYTREE_DEBUG_LEVEL )
+        KRATOS_REGISTER_IN_PYTHON_VARIABLE( MERGE_PARAMETER )
+
     }
 
 } // namespace Python.

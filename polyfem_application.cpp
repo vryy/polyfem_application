@@ -22,6 +22,8 @@
 namespace Kratos
 {
     // create the application variables here
+    KRATOS_CREATE_VARIABLE(int, POLYTREE_DEBUG_LEVEL)
+    KRATOS_CREATE_VARIABLE(double, MERGE_PARAMETER)
 
     // constructor
     KratosPolyFEMApplication::KratosPolyFEMApplication()
@@ -33,6 +35,10 @@ namespace Kratos
         // calling base class register to register Kratos components
         KratosApplication::Register();
         std::cout << "Initializing KratosPolyFEMApplication... " << std::endl;
+
+        // register variable
+        KRATOS_REGISTER_VARIABLE(POLYTREE_DEBUG_LEVEL)
+        KRATOS_REGISTER_VARIABLE(MERGE_PARAMETER)
     }
 
 } // namespace Kratos

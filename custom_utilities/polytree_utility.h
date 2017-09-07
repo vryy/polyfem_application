@@ -86,6 +86,20 @@ public:
     /// Pointer definition of PolyTreeUtility
     KRATOS_CLASS_POINTER_DEFINITION(PolyTreeUtility);
 
+    struct Comparator
+    {
+        /**
+         * Comparator for pair comparison
+         * @param  l first pair
+         * @param  r second pair
+         * @return   true if l.first < r.first, otherwise false
+         */
+        inline bool operator() (const std::pair<double, std::size_t>& l, const std::pair<double, std::size_t>& r)
+        {
+            return l.first < r.first;
+        }
+    };
+
     ///@}
     ///@name Life Cycle
     ///@{
@@ -109,17 +123,18 @@ public:
     /** 
      * Given a polygon, compute a decomposition of this polygon, using Voronoi tessellation and LLoyd algorithm
      * REF: H. Nguyen-Xuan et al, A polytree-based adaptive approach to limit analysis of cracked structures
-     * @param compatible_coordinates        the Voronoi coordinates
-     * @param voronoi_connectivities     connectivities of polygonal Voronoi cell (index-1 based)
-     * @param pro_constant       proportional constant to compute reflection
-     * @param max_iter           max number of iteration for LLoyd algorithm
-     * @param tol                tolerance for LLoyd iteration
-     * @param debug_level        debug level
-     *                           debug_level = 0: no printing at all
-     *                           debug_level = 1: print the error
-     *                           debug_level = 2: print the error and number of points generated in the iteration
-     *                           debug_level = 3: print as (2) and the matlab command to visualize the Voronoi cells
-     *                           debug_level = 4: very detail printing
+     * @param compatible_coordinates    the Voronoi coordinates
+     * @param voronoi_connectivities    connectivities of polygonal Voronoi cell (index-1 based)
+     * @param polygon                   the input polygon
+     * @param pro_constant      proportional constant to compute reflection
+     * @param max_iter          max number of iteration for LLoyd algorithm
+     * @param tol               tolerance for LLoyd iteration
+     * @param debug_level       debug level
+     *                          debug_level = 0: no printing at all
+     *                          debug_level = 1: print the error
+     *                          debug_level = 2: print the error and number of points generated in the iteration
+     *                          debug_level = 3: print as (2) and the matlab command to visualize the Voronoi cells
+     *                          debug_level = 4: very detail printing
      */
     static void ComputePolygonDecomposition(std::vector<std::vector<double> >& compatible_coordinates,
             std::vector<std::vector<std::size_t> >& voronoi_connectivities,
@@ -140,6 +155,11 @@ public:
         }
         center[0] /= polygon.size();
         center[1] /= polygon.size();
+
+        if (debug_level > 1)
+        {
+            std::cout << "  Number of vertices on the polygon: " << polygon.size() << std::endl;
+        }
 
         if (debug_level > 3)
         {
@@ -189,6 +209,11 @@ public:
                 }
             }
 
+            if (debug_level > 1)
+            {
+                std::cout << "  Number of reflection points: " << reflection_points.size() << std::endl;
+            }
+
             // compute the Voronoi tessellation
             // we insert the inside seed point first in order to get first the compatible polygon
             std::vector<double> seed_coordinates(2*(seed_points.size() + reflection_points.size()));
@@ -214,6 +239,7 @@ public:
             voronoi_coordinates.clear();
             voronoi_connectivities.clear();
             ComputeVoronoiTesselation(voronoi_coordinates, voronoi_connectivities, 2, seed_coordinates);
+            std::cout << "   ComputeVoronoiTesselation completed" << std::endl;
 
             if (debug_level > 3)
             {
@@ -309,6 +335,24 @@ public:
                           << ", current error = " << error
                           << ", tolerance = " << tol
                           << std::endl;
+            }
+        }
+
+        // compute the signed area to rotate if needed
+        std::vector<double> area;
+        ComputeArea(area, voronoi_coordinates, voronoi_connectivities);
+        if (debug_level > 3)
+        {
+            std::cout << "Area:" << std::endl;
+            for (std::size_t i = 0; i < area.size(); ++i)
+                std::cout << (i+1) << ": " << area[i] << std::endl;
+        }
+
+        for (std::size_t i = 0; i < area.size(); ++i)
+        {
+            if (area[i] < 0.0)
+            {
+                std::reverse(voronoi_connectivities[i].begin(), voronoi_connectivities[i].end());
             }
         }
 
@@ -511,6 +555,302 @@ public:
     }
 
     /**
+     * Encode the vertex information on the polygon
+     * @param stat        -1: outer;
+     *                    0: inner;
+     *                    1: on vertex;
+     *                    2: on edge (inner)
+     *                    3: on edge (outer)
+     * @param vertex_info if stat=1, the vertex index;
+     *                    stat=2, the edge index;
+     *                    otherwise -1
+     * @param edge_info   if stat=2, the index of the point on edge (start with 1);
+     *                    otherwise -1
+     * @param coordinates the input coordinates of the vertex need to encode
+     * @param polygon     the input polygon
+     * @param check_flag  check inside flag;
+     *                    if 0, check as normal;
+     *                    if 1, all the exceptional points (not on vertex and edge) are understood as inside;
+     *                    if 2, outside.
+     * @param tol         the tolerance for detection
+     */
+    static void EncodeVertices(std::vector<int>& stat,
+            std::vector<int>& vertex_info,
+            std::vector<int>& edge_info,
+            const std::vector<std::vector<double> >& coordinates,
+            const std::vector<std::vector<double> >& polygon,
+            const int& check_flag,
+            const double& tol)
+    {
+        stat.resize(coordinates.size());
+        vertex_info.resize(coordinates.size());
+        edge_info.resize(coordinates.size());
+
+        std::fill(stat.begin(), stat.end(), -2);
+        std::fill(vertex_info.begin(), vertex_info.end(), -1);
+        std::fill(edge_info.begin(), edge_info.end(), -1);
+
+        // check for point on vertex of the polygon
+        for (std::size_t i = 0; i < coordinates.size(); ++i)
+        {
+            for (std::size_t j = 0; j < polygon.size(); ++j)
+            {
+                double dist = sqrt(pow(coordinates[i][0] - polygon[j][0], 2) + pow(coordinates[i][1] - polygon[j][1], 2));
+                if (dist < tol)
+                {
+                    stat[i] = 1;
+                    vertex_info[i] = j;
+                    edge_info[i] = -1;
+                }
+            }
+            // std::cout << "point " << (i+1) << ": " << stat[i] << std::endl;
+        }
+
+        // check for point on edge of the polygon
+        std::vector<std::vector<std::size_t> > edge_with_points(polygon.size());
+        for (std::size_t i = 0; i < coordinates.size(); ++i)
+        {
+            if (stat[i] == -2)
+            {
+                for (std::size_t j = 0; j < polygon.size(); ++j)
+                {
+                    std::size_t k = (j == polygon.size()-1) ? 0 : j+1;
+
+                    // construct the line equation (ax + by + c = 0)
+                    double a = polygon[k][1] - polygon[j][1]; // y2 - y1
+                    double b = polygon[j][0] - polygon[k][0]; // x1 - x2
+                    double c = -a*polygon[j][0] - b*polygon[j][1]; // -ax1 - by1
+                    double length = sqrt(a*a + b*b);
+
+                    double dist = fabs(a*coordinates[i][0] + b*coordinates[i][1] + c) / length;
+                    // std::cout << "dist to edge " << j << ": " << dist << std::endl;
+                    if (dist < tol)
+                    {
+                        if (sqrt(pow(coordinates[i][0] - polygon[j][0], 2) + pow(coordinates[i][1] - polygon[j][1], 2)) < length)
+                        {
+                            stat[i] = 2;
+                            vertex_info[i] = j;
+                            edge_with_points[j].push_back(i);
+                        }
+                        else
+                        {
+                            stat[i] = 3;
+                            vertex_info[i] = j;
+                        }
+                    }
+                }
+            }
+            // std::cout << "point " << (i+1) << ": " << stat[i] << std::endl;
+            // std::cout << "point " << (i+1) << " vertex_info: " << vertex_info[i] << std::endl;
+        }
+
+        // check for index of the point on edge
+        for (std::size_t i = 0; i < polygon.size(); ++i)
+        {
+            // std::cout << "edge_with_points[" << i << "].size(): " << edge_with_points[i].size() << std::endl;
+            if (edge_with_points[i].size() != 0)
+            {
+                std::vector<std::pair<double, std::size_t> > dist_list(edge_with_points[i].size());
+                for (std::size_t j = 0; j < edge_with_points[i].size(); ++j)
+                {
+                    double dist = sqrt(pow(coordinates[edge_with_points[i][j]][0] - polygon[i][0], 2) + pow(coordinates[edge_with_points[i][j]][1] - polygon[i][1], 2));
+                    dist_list[j] = std::pair<double, std::size_t>(dist, edge_with_points[i][j]);
+                }
+
+                std::sort(dist_list.begin(), dist_list.end(), Comparator());
+
+                for (std::size_t j = 0; j < dist_list.size(); ++j)
+                {
+                    edge_info[dist_list[j].second] = j+1;
+                }
+            }
+        }
+
+        // check for inside/outside of the polygon
+        if (check_flag == 0)
+        {
+            for (std::size_t i = 0; i < coordinates.size(); ++i)
+            {
+                if (IsInside(coordinates[i], polygon))
+                    stat[i] = 0;
+                else
+                    stat[i] = -1;
+            }
+        }
+        else if (check_flag == 1)
+        {
+            for (std::size_t i = 0; i < coordinates.size(); ++i)
+            {
+                if (stat[i] == -2)
+                    stat[i] = 0;
+            }
+        }
+        else if (check_flag == 2)
+        {
+            for (std::size_t i = 0; i < coordinates.size(); ++i)
+            {
+                if (stat[i] == -2)
+                    stat[i] = -1;
+            }
+        }
+    }
+
+    /**
+     * Given a list of arranged points on line, find the clustering of the points
+     * @param cluster the output point cluster
+     * @param points  the input points (organized, e.g. on a line)
+     * @param alpha   the cluster deciding parameter
+     */
+    static void ClusterPoints(std::vector<std::vector<std::size_t> >& cluster,
+            const std::vector<std::vector<double> >& points, const double& alpha)
+    {
+        // compute the largest distance
+        double length = sqrt(pow(points.back()[0] - points.front()[0], 2) + pow(points.back()[1] - points.front()[1], 2));
+
+        // start to search the cluster from left to right
+        cluster.clear();
+        std::size_t this_point = 0;
+        do
+        {
+            if (this_point >= points.size() - 1)
+                break;
+
+            std::vector<size_t> group;
+            group.push_back(this_point);
+            std::size_t next_point = this_point + 1;
+            do
+            {
+                if (this_point >= points.size() - 1)
+                    break;
+
+                double dist = sqrt(pow(points[next_point][0] - points[this_point][0], 2) + pow(points[next_point][1] - points[this_point][1], 2));
+                if (dist <= alpha*length)
+                {
+                    group.push_back(next_point);
+                    ++this_point;
+                    ++next_point;
+                }
+                else
+                    break;
+            } while(true);
+
+            if (group.size() > 1)
+                cluster.push_back(group);
+
+            ++this_point;
+        } while (true);
+    }
+
+    /**
+     * Given a list of lengths (not needed to be organized), compute the clustering of the length according to the criteria
+     * @param cluster output cluster
+     * @param sorted_indices sorted indices based on length length
+     * @param lengths list of lengths
+     * @param alpha   the clustering parameter
+     */
+    static void ClusterLengths(std::vector<std::vector<std::size_t> >& cluster,
+            std::vector<std::size_t>& sorted_indices,
+            const std::vector<double>& lengths,
+            const double& alpha)
+    {
+        // firstly sort the distance
+        typedef std::vector<std::pair<double, std::size_t> > container_t;
+        container_t sorted_lengths;
+        for (std::size_t i = 0; i < lengths.size(); ++i)
+            sorted_lengths.push_back(std::pair<double, std::size_t>{lengths[i], i});
+        std::sort(sorted_lengths.begin(), sorted_lengths.end(), Comparator());
+
+        sorted_indices.resize(lengths.size());
+        for (std::size_t i = 0; i < lengths.size(); ++i)
+            sorted_indices[i] = sorted_lengths[i].second;
+
+        std::size_t first_index = sorted_indices.front();
+        std::size_t last_index = sorted_indices.back();
+
+        // compute the largest distance
+        double length = sorted_lengths.back().first - sorted_lengths.front().first;
+
+        cluster.clear();
+        container_t::iterator this_point = sorted_lengths.begin();
+        do
+        {
+            if (this_point == sorted_lengths.end())
+                break;
+
+            std::vector<size_t> group;
+
+            // group shall not contain element from two ends
+            if (this_point->second != first_index && this_point->second != last_index)
+                group.push_back(this_point->second);
+            container_t::iterator next_point = this_point+1;
+            do
+            {
+                if (next_point == sorted_lengths.end())
+                    break;
+
+                double dist = next_point->first - this_point->first;
+                if (dist <= alpha*length)
+                {
+                    // group shall not contain element from two ends
+                    if (next_point->second != first_index && next_point->second != last_index)
+                        group.push_back(next_point->second);
+                    ++this_point;
+                    ++next_point;
+                }
+                else
+                    break;
+            } while(true);
+
+            if (group.size() > 1)
+                cluster.push_back(group);
+
+            ++this_point;
+        } while (true);
+    }
+
+    /**
+     * Given the indices and sub-indices, find out which edge in indices the edge in sub-indices belong to
+     * Example:
+     *   Let say indices = (19 53 20) and sub-indices = (19 53 36 20)
+     *   then within sub-indices:
+     *       + edge 0 = (19 53) belongs to edge 0 = (19 53) of indices
+     *       + edge 1 = (53 36) belongs to edge 1 = (53 20) of indices
+     *       + edge 1 = (36 20) belongs to edge 1 = (53 20) of indices
+     * @param which_edge  the edge index, which_edge[new_edge] = original_edge
+     * @param sub_indices the indices of sub-edges (incrementally)
+     * @param indices     the indices of original edges
+     */
+    static void FindEdge(std::vector<std::size_t>& which_edge,
+            const std::vector<std::size_t>& sub_indices,
+            const std::vector<std::size_t>& indices)
+    {
+        std::map<std::size_t, int> index_code;
+
+        for (std::size_t i = 0; i < sub_indices.size(); ++i)
+            index_code[sub_indices[i]] = -1;
+
+        for (std::size_t i = 0; i < indices.size(); ++i)
+        {
+            index_code[indices[i]] = i;
+        }
+
+        for (std::size_t i = 0; i < sub_indices.size(); ++i)
+        {
+            if (index_code[sub_indices[i]] == -1)
+                index_code[sub_indices[i]] = index_code[sub_indices[i-1]];
+        }
+
+        which_edge.resize(sub_indices.size()-1);
+        for (std::size_t i = 0; i < sub_indices.size()-1; ++i)
+        {
+            int code1 = index_code[sub_indices[i]];
+            // int code2 = index_code[sub-indices[i+1]];
+
+            which_edge[i] = code1;
+        }
+    }
+
+    /**
      * Test the Voronoi tessellation
      */
     void TestComputeVoronoiTesselation() const
@@ -594,7 +934,7 @@ public:
         std::vector<std::vector<std::size_t> > compatible_connectivities;
         ComputePolygonDecomposition(voronoi_coordinates, compatible_connectivities, polygon, 1.5, max_iter, tol, debug_level);
 
-        std::cout << "voronoi coordinates:" << std::endl;
+        std::cout << "Voronoi coordinates:" << std::endl;
         for (std::size_t i = 0; i < voronoi_coordinates.size(); ++i)
         {
             std::cout << "  " << i+1 << ": " << voronoi_coordinates[i][0] << " " << voronoi_coordinates[i][1] << std::endl;
@@ -608,6 +948,108 @@ public:
             {
                 std::cout << " " << compatible_connectivities[i][j];
             }
+            std::cout << std::endl;
+        }
+
+        // encode the vertices in the appropriate way
+        std::vector<int> stat;
+        std::vector<int> vertex_info;
+        std::vector<int> edge_info;
+        double detect_tol = 1.0e-6; // TODO parameterize this
+        PolyTreeUtility::EncodeVertices(stat, vertex_info, edge_info, voronoi_coordinates, polygon, 1, detect_tol);
+
+        std::cout << "stat:" << std::endl;
+        for (std::size_t i = 0; i < voronoi_coordinates.size(); ++i)
+        {
+            std::cout << "  " << (i+1) << ": " << stat[i];
+
+            if (stat[i] == 0)
+                std::cout << ", is inner";
+            else if (stat[i] == 1)
+                std::cout << ", on vertex " << vertex_info[i];
+            else if (stat[i] == 2)
+                std::cout << ", on edge " << vertex_info[i] << ", index " << edge_info[i];
+
+            std::cout << std::endl;
+        }
+    }
+
+    void TestClusterPoints1()
+    {
+        std::vector<std::vector<double> > points;
+        points.push_back(std::vector<double>{0.0, 0.0});
+        points.push_back(std::vector<double>{1.0, 0.0});
+        points.push_back(std::vector<double>{2.0, 0.0});
+        points.push_back(std::vector<double>{2.1, 0.0});
+        points.push_back(std::vector<double>{3.0, 0.0});
+        points.push_back(std::vector<double>{4.0, 0.0});
+
+        double alpha = 0.1;
+
+        std::vector<std::vector<std::size_t> > cluster;
+        ClusterPoints(cluster, points, alpha);
+
+        std::cout << "cluster:" << std::endl;
+        for (std::size_t i = 0; i < cluster.size(); ++i)
+        {
+            std::cout << "  " << (i+1) << ":";
+            for (std::size_t j = 0; j < cluster[i].size(); ++j)
+                std::cout << " " << cluster[i][j];
+            std::cout << std::endl;
+        }
+    }
+
+    void TestClusterPoints2()
+    {
+        std::vector<std::vector<double> > points;
+        points.push_back(std::vector<double>{0.0, 0.0}); //0
+        points.push_back(std::vector<double>{1.0, 0.0}); //1
+        points.push_back(std::vector<double>{2.0, 0.0}); //2
+        points.push_back(std::vector<double>{2.1, 0.0}); //3
+        points.push_back(std::vector<double>{2.2, 0.0}); //4
+        points.push_back(std::vector<double>{3.0, 0.0}); //5
+        points.push_back(std::vector<double>{3.1, 0.0}); //6
+        points.push_back(std::vector<double>{4.0, 0.0}); //7
+
+        double alpha = 0.1;
+
+        std::vector<std::vector<std::size_t> > cluster;
+        ClusterPoints(cluster, points, alpha);
+
+        std::cout << "cluster:" << std::endl;
+        for (std::size_t i = 0; i < cluster.size(); ++i)
+        {
+            std::cout << "  " << (i+1) << ":";
+            for (std::size_t j = 0; j < cluster[i].size(); ++j)
+                std::cout << " " << cluster[i][j];
+            std::cout << std::endl;
+        }
+    }
+
+    void TestClusterLengths1()
+    {
+        std::vector<double> lengths;
+        lengths.push_back(0.0); //0
+        lengths.push_back(1.1); //1
+        lengths.push_back(2.0); //2
+        lengths.push_back(1.0); //3
+        lengths.push_back(1.2); //4
+        lengths.push_back(3.0); //5
+        lengths.push_back(4.0); //6
+        lengths.push_back(4.1); //7
+
+        double alpha = 0.1;
+
+        std::vector<std::vector<std::size_t> > cluster;
+        std::vector<std::size_t> sorted_indices;
+        ClusterLengths(cluster, sorted_indices, lengths, alpha);
+
+        std::cout << "cluster:" << std::endl;
+        for (std::size_t i = 0; i < cluster.size(); ++i)
+        {
+            std::cout << "  " << (i+1) << ":";
+            for (std::size_t j = 0; j < cluster[i].size(); ++j)
+                std::cout << " " << cluster[i][j];
             std::cout << std::endl;
         }
     }
@@ -743,6 +1185,29 @@ private:
             area += 0.5*(polygon[i][0]*polygon[j][1] - polygon[j][0]*polygon[i][1]);
         }
         return area;
+    }
+
+    /**
+     * Compute the (signed) area of the list of polygons
+     * // REF: http://geomalgorithms.com/a01-_area.html#2D%20Polygons
+     * @param  polygon the input polygon
+     * @return         the signed area
+     */
+    static void ComputeArea(std::vector<double>& area,
+            const std::vector<std::vector<double> >& coordinates,
+            const std::vector<std::vector<std::size_t> >& connectivities)
+    {
+        area.resize(connectivities.size());
+        for (std::size_t i = 0; i < connectivities.size(); ++i)
+        {
+            area[i] = 0.0;
+            for (std::size_t j = 0; j < connectivities[i].size(); ++j)
+            {
+                std::size_t k = (j == connectivities[i].size()-1) ? 0 : j+1;
+                area[i] += 0.5*(coordinates[connectivities[i][j]-1][0]*coordinates[connectivities[i][k]-1][1]
+                              - coordinates[connectivities[i][k]-1][0]*coordinates[connectivities[i][j]-1][1]);
+            }
+        }
     }
 
     ///@}

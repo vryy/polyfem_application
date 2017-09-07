@@ -11,6 +11,7 @@
 
 // Project includes
 #include "includes/element.h"
+#include "containers/data_value_container.h"
 #include "custom_python/add_custom_utilities_to_python.h"
 #include "custom_utilities/polyfem_utility.h"
 #include "custom_utilities/poly_half_edge.h"
@@ -106,6 +107,15 @@ std::size_t PolyFace_HashCode(PolyFace<TDim>& dummy)
     return PolyHash<TDim>{}(dummy);
 }
 
+void PolyTree2D_WriteMatlabToFile(PolyTree2D& dummy, std::string filename,
+        bool write_vertex_number, bool write_face_number)
+{
+    std::ofstream outfile;
+    outfile.open(filename.c_str());
+    dummy.WriteMatlab(outfile, write_vertex_number, write_face_number);
+    outfile.close();
+}
+
 
 void PolyFEMApplication_AddCustomUtilitiesToPython()
 {
@@ -158,7 +168,7 @@ void PolyFEMApplication_AddCustomUtilitiesToPython()
     ;
 
     class_<PolyHalfEdge<2>, PolyHalfEdge<2>::Pointer, boost::noncopyable>
-    ("PolyHalfEdge2D", init<PolyHalfEdge<2>::NodeType::Pointer, PolyHalfEdge<2>::NodeType::Pointer>())
+    ("PolyHalfEdge2D", init<PolyHalfEdge<2>::VertexType::Pointer, PolyHalfEdge<2>::VertexType::Pointer>())
     .def("HashCode", &PolyHalfEdge_HashCode<2>)
     .def(self_ns::str(self))
     ;
@@ -169,9 +179,18 @@ void PolyFEMApplication_AddCustomUtilitiesToPython()
     .def(self_ns::str(self))
     ;
 
-    class_<PolyTree2D, PolyTree2D::Pointer, boost::noncopyable>
+    class_<PolyTree2D, PolyTree2D::Pointer, bases<DataValueContainer>, boost::noncopyable>
     ("PolyTree2D", init<>())
+    .def("LastVertexId", &PolyTree2D::LastVertexId)
+    .def("LastFaceId", &PolyTree2D::LastFaceId)
+    .def("CreateFace", &PolyTree2D::CreateFace)
     .def("Synchronize", &PolyTree2D::Synchronize)
+    .def("MarkFaceRefine", &PolyTree2D::MarkFaceRefine)
+    .def("MarkFaceCoarsen", &PolyTree2D::MarkFaceCoarsen)
+    .def("BeginRefineCoarsen", &PolyTree2D::BeginRefineCoarsen)
+    .def("EndRefineCoarsen", &PolyTree2D::EndRefineCoarsen)
+    .def("Validate", &PolyTree2D::Validate)
+    .def("WriteMatlab", &PolyTree2D_WriteMatlabToFile)
     .def(self_ns::str(self))
     ;
 
@@ -182,6 +201,9 @@ void PolyFEMApplication_AddCustomUtilitiesToPython()
     .def("TestComputeVoronoiTesselation", &PolyTreeUtility::TestComputeVoronoiTesselation)
     .def("TestComputeReflectionPoints", &PolyTreeUtility::TestComputeReflectionPoints)
     .def("TestPolygonDecomposition", &PolyTreeUtility::TestPolygonDecomposition)
+    .def("TestClusterPoints1", &PolyTreeUtility::TestClusterPoints1)
+    .def("TestClusterPoints2", &PolyTreeUtility::TestClusterPoints2)
+    .def("TestClusterLengths1", &PolyTreeUtility::TestClusterLengths1)
     .def(self_ns::str(self))
     ;
 

@@ -33,6 +33,8 @@ namespace Kratos
     ///@{
 
     // Variables definition
+    KRATOS_DEFINE_VARIABLE(int, POLYTREE_DEBUG_LEVEL)
+    KRATOS_DEFINE_VARIABLE(double, MERGE_PARAMETER)
 
     ///@}
     ///@name Type Definitions
