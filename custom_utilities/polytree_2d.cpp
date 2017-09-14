@@ -22,7 +22,8 @@
 #include "polytree_utility.h"
 #include "polyfem_application/polyfem_application.h"
 
-#define DEBUG_REFINE
+// #define DEBUG_REFINE
+// #define DEBUG_COARSEN
 
 namespace Kratos
 {
@@ -113,8 +114,13 @@ int PolyTree2D::MarkFaceRefine(const std::size_t& face_index)
             it->SetCoarsen(false);
             #ifdef DEBUG_REFINE
             std::cout << *it << " is marked to be refined" << std::endl;
-            #endif
-            m_half_edge_state = CACHED;
+            #endif // DEBUG_REFINE
+            if (m_half_edge_state == CACHED_COARSEN)
+            {
+                KRATOS_THROW_ERROR(std::logic_error, "The refine and coarsen operations are not allowed at the same time", "")
+            }
+            else
+                m_half_edge_state = CACHED_REFINE;
             return 0;
         }
         else
@@ -133,10 +139,16 @@ int PolyTree2D::MarkFaceCoarsen(const std::size_t& face_index)
         {
             it->SetRefine(false);
             it->SetCoarsen(true);
-            #ifdef DEBUG_REFINE
+            #ifdef DEBUG_COARSEN
             std::cout << *it << " is marked to be coarsen" << std::endl;
-            #endif
-            m_half_edge_state = CACHED;
+            #endif // DEBUG_COARSEN
+            if (m_half_edge_state == CACHED_REFINE)
+            {
+                KRATOS_THROW_ERROR(std::logic_error, "The refine and coarsen operations are not allowed at the same time", "")
+            }
+            else
+                m_half_edge_state = CACHED_COARSEN;
+            return 0;
         }
         else
             return -1;
@@ -149,7 +161,7 @@ void PolyTree2D::BeginRefineCoarsen()
 {
     std::cout << __FUNCTION__ << " starts" << std::endl;
 
-    if (m_half_edge_state == CACHED)
+    if (m_half_edge_state == CACHED_REFINE || m_half_edge_state == CACHED_COARSEN)
     {
         // firstly get all the indices of the face
         std::set<std::size_t> all_face_indices;
@@ -161,7 +173,10 @@ void PolyTree2D::BeginRefineCoarsen()
         // then refine those face in that indices
         for (std::set<std::size_t>::iterator is = all_face_indices.begin(); is != all_face_indices.end(); ++is)
         {
-            // FaceContainerType::iterator it = mFaceList.find(*is);
+            FaceContainerType::iterator it = mFaceList.find(*is);
+            if (it == mFaceList.end())
+                continue;
+
             FaceType::Pointer pFace = mFaceList(*is);
 
             if (pFace->IsRefined())
@@ -191,7 +206,121 @@ void PolyTree2D::BeginRefineCoarsen()
             {
                 if (!pFace->IsLeaf())
                 {
-                    // TODO remove all the sub-faces
+                    // collect all the edges around the face
+                    EdgeContainerType pOuterEdges;
+                    EdgeContainerType pInnerEdges;
+                    VertexContainerType pInnerVertices;
+                    FaceContainerType pInnerFaces;
+
+                    ExtractEdgesAndVertices(pFace, pOuterEdges, pInnerEdges, pInnerVertices, pInnerFaces);
+
+                    #ifdef DEBUG_COARSEN
+                    std::cout << "list of inner faces of " << *pFace << ":" << std::endl;
+                    for (FaceContainerType::const_iterator it = pInnerFaces.begin(); it != pInnerFaces.end(); ++it)
+                        std::cout << "  " << *it << std::endl;
+                    std::cout << std::endl;
+                    #endif // DEBUG_COARSEN
+
+                    #ifdef DEBUG_COARSEN
+                    std::cout << "list of outer edges of " << *pFace << ":" << std::endl;
+                    for (EdgeContainerType::const_iterator it = pOuterEdges.begin(); it != pOuterEdges.end(); ++it)
+                        std::cout << "  " << *it << std::endl;
+                    std::cout << std::endl;
+                    #endif // DEBUG_COARSEN
+
+                    // remove all the sub-faces and edges, also the inner vertices
+                    std::vector<EdgeGetKeyType::result_type> removed_edge_keys;
+                    for (EdgeContainerType::const_iterator it = pInnerEdges.begin(); it != pInnerEdges.end(); ++it)
+                        removed_edge_keys.push_back(EdgeGetKeyType()(*it));
+                    for (std::size_t i = 0; i < removed_edge_keys.size(); ++i)
+                    {
+                        mEdgeList.erase(removed_edge_keys[i]);
+                        #ifdef DEBUG_COARSEN
+                        std::cout << "  edge(" << removed_edge_keys[i].first << " " << removed_edge_keys[i].second << ") is removed" << std::endl;
+                        #endif // DEBUG_COARSEN
+                    }
+                    mEdgeList.Sort(); // sort after erasing
+
+                    std::vector<std::size_t> removed_vertex_keys;
+                    for (VertexContainerType::const_iterator it = pInnerVertices.begin(); it != pInnerVertices.end(); ++it)
+                        removed_vertex_keys.push_back(it->Id());
+                    for (std::size_t i = 0; i < removed_vertex_keys.size(); ++i)
+                    {
+                        mVertexList.erase(removed_vertex_keys[i]);
+                        #ifdef DEBUG_COARSEN
+                        std::cout << "  vertex " << removed_vertex_keys[i] << " is removed" << std::endl;
+                        #endif // DEBUG_COARSEN
+                    }
+                    mVertexList.Sort();
+
+                    std::vector<std::size_t> removed_face_keys;
+                    for (FaceContainerType::const_iterator it = pInnerFaces.begin(); it != pInnerFaces.end(); ++it)
+                        removed_face_keys.push_back(it->Id());
+                    for (std::size_t i = 0; i < removed_face_keys.size(); ++i)
+                    {
+                        mFaceList.erase(removed_face_keys[i]);
+                        #ifdef DEBUG_COARSEN
+                        std::cout << "  face " << removed_face_keys[i] << " is removed" << std::endl;
+                        #endif // DEBUG_COARSEN
+                    }
+                    mFaceList.Sort();
+
+                    // clear the sub-faces, and also remove it from the mFaceList
+                    std::set<std::size_t> removed_sub_faces;
+                    pFace->ClearSubFaces(removed_sub_faces);
+
+                    for (std::set<std::size_t>::iterator it = removed_sub_faces.begin(); it != removed_sub_faces.end(); ++it)
+                    {
+                        mFaceList.erase(*it);
+                    }
+
+                    mFaceList.Sort();
+
+                    // create a new face from the round edges, also re-set the next edge for the outer edges
+                    pFace->pSetEdge(*(pOuterEdges.ptr_begin()));
+                    pFace->SetActive(true);
+                    for (EdgeContainerType::ptr_iterator it = pOuterEdges.ptr_begin(); it != pOuterEdges.ptr_end(); ++it)
+                    {
+                        EdgeContainerType::ptr_iterator it2 = it+1;
+                        if (it2 == pOuterEdges.ptr_end()) it2 = pOuterEdges.ptr_begin();
+                        (*it)->pSetNextEdge(*it2);
+                        (*it2)->pSetPrevEdge(*it);
+                        (*it)->pSetFace(pFace);
+                    }
+
+                    #ifdef DEBUG_COARSEN
+                    std::cout << *pFace << " is modified after coarsening" << std::endl;
+                    #endif // DEBUG_COARSEN
+
+                    // re-set the edge of the vertex
+                    // this will also re-set the edge for valid vertex, but it's OK. It will take more time and more code to select the valid/invalid here
+                    EdgeType::Pointer pEdge = pFace->pEdge();
+                    EdgeType::Pointer pFirstEdge = pEdge;
+                    do
+                    {
+                        pEdge->pNode1()->pSetEdge(pEdge);
+                        pEdge = pEdge->pNextEdge();
+                    } while (pEdge != pFirstEdge);
+
+                    #ifdef DEBUG_COARSEN
+                    std::cout << *pFace << " vertices:" << std::endl;
+                    pEdge = pFace->pEdge();
+                    pFirstEdge = pEdge;
+                    do
+                    {
+                        std::cout << "  " << *(pEdge->pNode1()) << std::endl;
+                        pEdge = pEdge->pNextEdge();
+                    } while (pEdge != pFirstEdge);
+
+                    std::cout << *pFace << " edges:" << std::endl;
+                    pEdge = pFace->pEdge();
+                    pFirstEdge = pEdge;
+                    do
+                    {
+                        std::cout << "  " << *pEdge << std::endl;
+                        pEdge = pEdge->pNextEdge();
+                    } while (pEdge != pFirstEdge);
+                    #endif // DEBUG_COARSEN
                 }
                 else
                 {
@@ -248,7 +377,7 @@ void PolyTree2D::EndRefineCoarsen()
         {
             std::cout << "    " << *it << std::endl;
         }
-        #endif
+        #endif // DEBUG_REFINE
 
         // merge the composite edges. This is to reduce number of near points in the polygon mesh.
         // here we loop through the list of composite edges and make the pair with its opposite
@@ -323,12 +452,14 @@ void PolyTree2D::EndRefineCoarsen()
                       << "  " << *(EdgePairs[i].second) << std::endl;
         }
         std::cout << " ----------------" << std::endl;
-        #endif
+        #endif // DEBUG_REFINE
 
         double alpha = 0.1;
         if (this->Has(MERGE_PARAMETER))
             alpha = this->GetValue(MERGE_PARAMETER);
+        #ifdef DEBUG_REFINE
         KRATOS_WATCH(alpha)
+        #endif // DEBUG_REFINE
 
         VertexContainerType pNewVertices;
         EdgeContainerType pNewEdges;
@@ -353,7 +484,7 @@ void PolyTree2D::EndRefineCoarsen()
         {
             std::cout << "    " << *it << std::endl;
         }
-        #endif
+        #endif // DEBUG_REFINE
 
         // clear the temporary memory
         EdgePairs.clear();
@@ -393,7 +524,7 @@ void PolyTree2D::EndRefineCoarsen()
             EdgeContainerType::const_iterator it2 = mEdgeList.find(key);
             std::cout << "    " << *it << ": " << *(*it) << ", key: (" << key.first << " " << key.second << "), found = " << (it2!=mEdgeList.end()) << std::endl;
         }
-        #endif
+        #endif // DEBUG_REFINE
 
         // add the composite edges to list
         mCompositeEdgeList.insert(pNewCompositeEdges.ptr_begin(), pNewCompositeEdges.ptr_end());
@@ -438,17 +569,17 @@ void PolyTree2D::EndRefineCoarsen()
         {
             std::cout << "    " << *it << ": " << *(*it) << std::endl;
         }
-        #endif
+        #endif // DEBUG_REFINE
 
         // this operation is normally not required. We put it here to stop the code if something wrong happens
         #ifdef DEBUG_REFINE
         std::cout << "  Unique operations are called" << std::endl;
-        #endif
+        #endif // DEBUG_REFINE
         mEdgeList.Unique();
         mVertexList.Unique();
         #ifdef DEBUG_REFINE
         std::cout << "  Unique operations completed" << std::endl;
-        #endif
+        #endif // DEBUG_REFINE
 
         // for all node, if the half-edge at the node is composite, then it shall have new half-edge
         for (VertexContainerType::iterator it = mVertexList.begin(); it != mVertexList.end(); ++it)
@@ -460,11 +591,11 @@ void PolyTree2D::EndRefineCoarsen()
                     EdgeType::Pointer pEdge = it->pEdge()->pSubEdge(0);
                     #ifdef DEBUG_REFINE
                     std::cout << *it << " is set with ";
-                    #endif
+                    #endif // DEBUG_REFINE
                     it->pSetEdge(pEdge);
                     #ifdef DEBUG_REFINE
                     std::cout << *pEdge << std::endl;
-                    #endif
+                    #endif // DEBUG_REFINE
                 }
             }
         }
@@ -484,7 +615,7 @@ void PolyTree2D::EndRefineCoarsen()
         {
             #ifdef DEBUG_REFINE
             std::cout << "     setting edge for " << *it << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
             EdgeType::Pointer pEdge = it->pEdge();
             EdgeGetKeyType::result_type key = EdgeGetKeyType()(*pEdge);
             EdgeContainerType::const_iterator it2 = mEdgeList.find(key);
@@ -505,14 +636,14 @@ void PolyTree2D::EndRefineCoarsen()
         // TODO shall we search and remove all composite edges in mCompositeEdgeList to save memory?
         #ifdef DEBUG_REFINE
         std::cout << "  mCompositeEdgeList is going to be cleared" << std::endl;
+        #endif // DEBUG_REFINE
         mCompositeEdgeList.clear();
-        #endif
 
         // remove the newly created edge list to save memory
         #ifdef DEBUG_REFINE
         std::cout << "  mNewEdgeList is going to be cleared" << std::endl;
+        #endif // DEBUG_REFINE
         mNewEdgeList.clear();
-        #endif
 
         // mark all the edges that belongs to the inactive face and remove it
         RemoveLoneEdges(mEdgeList);
@@ -534,7 +665,10 @@ void PolyTree2D::EndRefineCoarsen()
             }
             // std::cout << "     " << *it << std::endl;
         }
-        #endif
+        #endif // DEBUG_REFINE
+
+        /*************FOR COARSENING***********/
+        // TODO adjust vertex location to have all convex polygon. It happens that after the coarsening some polygons turn to be concave.
 
         m_half_edge_state = FINALIZED;
     }
@@ -720,10 +854,10 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
         std::size_t& LastVertexId,
         const double& alpha) const
 {
-    #ifdef DEBUG_REFINE 
+    #ifdef DEBUG_REFINE
     std::cout << "  MergeEdges starts on " << *pEdge << std::endl
               << "   and " << *pOppositeEdge << std::endl;
-    #endif
+    #endif // DEBUG_REFINE
 
     if (pEdge->IsComposite())
     {
@@ -731,7 +865,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
         {
             #ifdef DEBUG_REFINE
             std::cout << "    Merge " << *pEdge << " with its opposite" << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             // collect all the points on two edges
             std::map<std::size_t, double> map_distance;
@@ -788,7 +922,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             std::cout << "    sub-edges on reversed edge:" << std::endl;
             for (std::size_t i = 0; i < pOppositeEdge->NumberOfSubEdges(); ++i)
                 std::cout << "     " << *pOppositeEdge->pSubEdge(i) << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             #ifdef DEBUG_REFINE
             std::cout << "     cluster:" << std::endl;
@@ -799,7 +933,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
                     std::cout << " " << cluster[i][j];
                 std::cout << std::endl;
             }
-            #endif
+            #endif // DEBUG_REFINE
 
             // find the indices of the length
             for (std::size_t i = 0; i < sorted_indices.size(); ++i)
@@ -810,7 +944,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             for (std::size_t i = 0; i < sorted_indices.size(); ++i)
                 std::cout << " " << sorted_indices[i];
             std::cout << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             // create a list of potential forward edges and reversed edges
             std::vector<std::pair<std::size_t, std::size_t> > forward_edges;
@@ -831,7 +965,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             for (std::size_t i = 0; i < reversed_edges.size(); ++i)
                 std::cout << " (" << reversed_edges[i].first << " " << reversed_edges[i].second << ")";
             std::cout << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             // find out which edge belong to which original edge
             std::vector<std::size_t> which_edge;
@@ -842,7 +976,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             for (std::size_t i = 0; i < which_edge.size(); ++i)
                 std::cout << " " << i << ":" << which_edge[i];
             std::cout << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             std::vector<std::size_t> which_reversed_edge;
             std::vector<std::size_t> reversed_sorted_indices = sorted_indices;
@@ -854,7 +988,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             for (std::size_t i = 0; i < which_reversed_edge.size(); ++i)
                 std::cout << " " << i << ":" << which_reversed_edge[i];
             std::cout << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             // for each point cluster, choose a point, or create the new point
             for (std::size_t i = 0; i < cluster.size(); ++i)
@@ -875,7 +1009,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
                     pVertex = boost::make_shared<VertexType>(++LastVertexId, x, y);
                     #ifdef DEBUG_REFINE
                     std::cout << "     New " << *pVertex << " is created" << std::endl;
-                    #endif
+                    #endif // DEBUG_REFINE
                     rVertexList.insert(rVertexList.begin(), pVertex);
                 }
                 else
@@ -967,18 +1101,16 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
                     } while (pThisEdge != pFirstEdge->pOppositeEdge());
                 }
 
-                #ifdef DEBUG_REFINE
                 if (vertex_is_set)
                 {
                     #ifdef DEBUG_REFINE
                     std::cout << "     " << *pVertex << " is set with edge ";
-                    #endif
+                    #endif // DEBUG_REFINE
                     pVertex->pSetEdge(pVertexEdge);
                     #ifdef DEBUG_REFINE
                     std::cout << *pVertexEdge << std::endl;
-                    #endif
+                    #endif // DEBUG_REFINE
                 }
-                #endif
             }
 
             #ifdef DEBUG_REFINE
@@ -988,7 +1120,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             std::cout << "    sub-edges on reversed edge after merging:" << std::endl;
             for (std::size_t i = 0; i < pOppositeEdge->NumberOfSubEdges(); ++i)
                 std::cout << "     " << *pOppositeEdge->pSubEdge(i) << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             #ifdef DEBUG_REFINE
             std::cout << "     forward_edges after merging:";
@@ -999,7 +1131,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             for (std::size_t i = 0; i < reversed_edges.size(); ++i)
                 std::cout << " (" << reversed_edges[i].first << " " << reversed_edges[i].second << ")";
             std::cout << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             // reset the forward edges and reversed edges if needed
             std::vector<std::pair<std::size_t, std::size_t> > new_forward_edges;
@@ -1033,7 +1165,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             for (std::size_t i = 0; i < new_reversed_edges.size(); ++i)
                 std::cout << " (" << new_reversed_edges[i].first << " " << new_reversed_edges[i].second << ")(" << new_which_reversed_edge[i] << ")";
             std::cout << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             // turn sub-edges to composite edges if needed (on forward side)
             std::vector<std::size_t> number_of_sub_edges_on_sub_edge(pEdge->NumberOfSubEdges());
@@ -1048,7 +1180,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             for (std::size_t i = 0; i < number_of_sub_edges_on_sub_edge.size(); ++i)
                 std::cout << " " << number_of_sub_edges_on_sub_edge[i];
             std::cout << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             std::vector<EdgeType::Pointer> pForwardEdges;
             for (std::size_t i = 0; i < pEdge->NumberOfSubEdges(); ++i)
@@ -1102,17 +1234,17 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
                     // change the sub-edge to composite edge, so they will be deleted later on
                     #ifdef DEBUG_REFINE
                     std::cout << "     " << *pEdge->pSubEdge(i) << " turns to composite:";
-                    #endif
+                    #endif // DEBUG_REFINE
                     pEdge->pSubEdge(i)->SetSubEdges(pNewSubEdges);
                     rCompositeEdgeList.insert(rCompositeEdgeList.begin(), pEdge->pSubEdge(i));
                     #ifdef DEBUG_REFINE
                     std::cout << " " << *pEdge->pSubEdge(i) << std::endl;
-                    #endif
+                    #endif // DEBUG_REFINE
 
                     #ifdef DEBUG_REFINE
                     for (std::size_t i = 0; i < pNewSubEdges.size(); ++i)
                         std::cout << "     " << *pNewSubEdges[i] << " is created" << std::endl;
-                    #endif
+                    #endif // DEBUG_REFINE
                 }
                 else
                 {
@@ -1133,7 +1265,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             for (std::size_t i = 0; i < number_of_sub_edges_on_sub_edge_reversed.size(); ++i)
                 std::cout << " " << number_of_sub_edges_on_sub_edge_reversed[i];
             std::cout << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             std::vector<EdgeType::Pointer> pReverseEdges;
             for (std::size_t i = 0; i < pOppositeEdge->NumberOfSubEdges(); ++i)
@@ -1187,17 +1319,17 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
                     // change the sub-edge to composite edge, so they will be deleted later on
                     #ifdef DEBUG_REFINE
                     std::cout << "     " << *pOppositeEdge->pSubEdge(i) << " turns to composite:";
-                    #endif
+                    #endif // DEBUG_REFINE
                     pOppositeEdge->pSubEdge(i)->SetSubEdges(pNewSubEdges);
                     rCompositeEdgeList.insert(rCompositeEdgeList.begin(), pOppositeEdge->pSubEdge(i));
                     #ifdef DEBUG_REFINE
                     std::cout << " " << *pOppositeEdge->pSubEdge(i) << std::endl;
-                    #endif
+                    #endif // DEBUG_REFINE
 
                     #ifdef DEBUG_REFINE
                     for (std::size_t i = 0; i < pNewSubEdges.size(); ++i)
                         std::cout << "     " << *pNewSubEdges[i] << " is created" << std::endl;
-                    #endif
+                    #endif // DEBUG_REFINE
                 }
                 else
                 {
@@ -1212,7 +1344,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             std::cout << "     list of reversed edges before setting opposite (only half-edges, no composite):" << std::endl;
             for (std::size_t i = 0; i < pReverseEdges.size(); ++i)
                 std::cout << "      " << *pReverseEdges[i] << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             // set opposite edge again
             // we also modify the forward edges a bit to use the existing edges if having
@@ -1248,12 +1380,12 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             std::cout << "     list of reversed edges (only half-edges, no composite):" << std::endl;
             for (std::size_t i = 0; i < pReverseEdges.size(); ++i)
                 std::cout << "      " << *pReverseEdges[i] << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             #ifdef DEBUG_REFINE
             std::cout << "     The edge is " << *pEdge << std::endl;
             std::cout << "     The opposite edge is " << *pOppositeEdge << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             // turn the original sub-edges to composite if needed
             for (std::size_t i = 0; i < pEdge->NumberOfSubEdges(); ++i)
@@ -1269,11 +1401,11 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
                         }
                         #ifdef DEBUG_REFINE
                         std::cout << "     " << *pEdge->pSubEdge(i)->pOppositeEdge() << " turns to composite:";
-                        #endif
+                        #endif // DEBUG_REFINE
                         pEdge->pSubEdge(i)->pOppositeEdge()->SetSubEdges(pTmpEdges);
                         #ifdef DEBUG_REFINE
                         std::cout << " " << *pEdge->pSubEdge(i)->pOppositeEdge() << std::endl;
-                        #endif
+                        #endif // DEBUG_REFINE
                     }
                 }
             }
@@ -1291,11 +1423,11 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
                         }
                         #ifdef DEBUG_REFINE
                         std::cout << "     " << *pOppositeEdge->pSubEdge(i)->pOppositeEdge() << " turns to composite:";
-                        #endif
+                        #endif // DEBUG_REFINE
                         pOppositeEdge->pSubEdge(i)->pOppositeEdge()->SetSubEdges(pTmpEdges);
                         #ifdef DEBUG_REFINE
                         std::cout << " " << *pOppositeEdge->pSubEdge(i)->pOppositeEdge() << std::endl;
-                        #endif
+                        #endif // DEBUG_REFINE
                     }
                 }
             }
@@ -1309,13 +1441,13 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             #ifdef DEBUG_REFINE
             std::cout << "     The edge now is " << *pEdge << std::endl;
             std::cout << "     The opposite edge now is " << *pOppositeEdge << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
         }
         else
         {
             #ifdef DEBUG_REFINE
             std::cout << "    " << *pEdge << " generates half-edges for opposite" << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             std::vector<EdgeType::Pointer> pReverseEdges;
             for (std::size_t i = pEdge->NumberOfSubEdges(); i > 0 ; --i)
@@ -1362,7 +1494,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             {
                 std::cout << "     " << *pReverseEdges[i] << " on reversed side is created" << std::endl;
             }
-            #endif
+            #endif // DEBUG_REFINE
         }
     }
     else
@@ -1371,7 +1503,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
         {
             #ifdef DEBUG_REFINE
             std::cout << "    Opposite generates half-edges for " << *pEdge << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
 
             std::vector<EdgeType::Pointer> pForwardEdges;
             for (std::size_t i = pOppositeEdge->NumberOfSubEdges(); i > 0 ; --i)
@@ -1418,7 +1550,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
             {
                 std::cout << "     " << *pForwardEdges[i] << " on forward side is created" << std::endl;
             }
-            #endif
+            #endif // DEBUG_REFINE
         }
         else
         {
@@ -1446,7 +1578,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
 
     #ifdef DEBUG_REFINE
     std::cout << "  MergeEdges completed" << std::endl;
-    #endif
+    #endif // DEBUG_REFINE
 }
 
 void PolyTree2D::RefineFace(PolyTree2D::FaceType::Pointer pFace,
@@ -1513,7 +1645,7 @@ void PolyTree2D::RefineFace(PolyTree2D::FaceType::Pointer pFace,
     {
         std::cout << "  " << i+1 << ": " << *pEdges[i] << std::endl;
     }
-    #endif
+    #endif // DEBUG_REFINE
 
     // extract the reversed composite edges
     for (std::size_t i = 0; i < pEdges.size(); ++i)
@@ -1543,7 +1675,7 @@ void PolyTree2D::RefineFace(PolyTree2D::FaceType::Pointer pFace,
     std::size_t debug_level = 3;    // TODO parameterize this
     #else
     std::size_t debug_level = 0;    // TODO parameterize this
-    #endif
+    #endif // DEBUG_REFINE
     PolyTreeUtility::ComputePolygonDecomposition(compatible_coordinates,
             voronoi_connectivities, polygon, pro_constant, max_iter, tol, debug_level);
 
@@ -1564,7 +1696,7 @@ void PolyTree2D::RefineFace(PolyTree2D::FaceType::Pointer pFace,
         }
         std::cout << std::endl;
     }
-    #endif
+    #endif // DEBUG_REFINE
 
     // encode the vertices in the appropriate way
     std::vector<int> vertex_stat;
@@ -1588,7 +1720,7 @@ void PolyTree2D::RefineFace(PolyTree2D::FaceType::Pointer pFace,
 
         std::cout << std::endl;
     }
-    #endif
+    #endif // DEBUG_REFINE
 
     // create new vertices
     std::map<std::size_t, VertexType::Pointer> VertexMap; // this is the map from Voronoi vertices (compatible_coordinates) to the new VertexType in the tree
@@ -1599,7 +1731,7 @@ void PolyTree2D::RefineFace(PolyTree2D::FaceType::Pointer pFace,
             VertexType::Pointer pNewVertex = boost::make_shared<VertexType>(++LastVertexId, compatible_coordinates[i][0], compatible_coordinates[i][1]);
             #ifdef DEBUG_REFINE
             std::cout << "Vertex " << pNewVertex->Id() << " is created at " << (*pNewVertex)[0] << "," << (*pNewVertex)[1] << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
             VertexMap[i] = pNewVertex;
             rVertexList.insert(rVertexList.begin(), pNewVertex);
         }
@@ -1630,7 +1762,7 @@ void PolyTree2D::RefineFace(PolyTree2D::FaceType::Pointer pFace,
         std::vector<EdgeType::Pointer> pNewEdges;
         #ifdef DEBUG_REFINE
         KRATOS_WATCH(voronoi_connectivities[i].size())
-        #endif
+        #endif // DEBUG_REFINE
         for (std::size_t j = 0; j < voronoi_connectivities[i].size(); ++j)
         {
             std::size_t this_vertex = voronoi_connectivities[i][j]-1;
@@ -1638,7 +1770,7 @@ void PolyTree2D::RefineFace(PolyTree2D::FaceType::Pointer pFace,
             EdgeType::Pointer pEdge = boost::make_shared<EdgeType>(VertexMap[this_vertex], VertexMap[next_vertex]);
             #ifdef DEBUG_REFINE
             std::cout << j << ": " << *pEdge << " is created" << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
             rNewEdgeList.insert(rNewEdgeList.begin(), pEdge);
             pEdge->pSetFace(pNewFace);
             if (j == 0) pNewFace->pSetEdge(pEdge);
@@ -1668,7 +1800,7 @@ void PolyTree2D::RefineFace(PolyTree2D::FaceType::Pointer pFace,
         std::cout << " (" << it->first.first << "-" << it->first.second << ")";
     }
     std::cout << std::endl;
-    #endif
+    #endif // DEBUG_REFINE
 
     // set the opposite edges
     for (EdgeMapType::iterator it = EdgeMap.begin(); it != EdgeMap.end(); ++it)
@@ -1684,7 +1816,7 @@ void PolyTree2D::RefineFace(PolyTree2D::FaceType::Pointer pFace,
             #ifdef DEBUG_REFINE
             std::cout << "Half-edge (" << it->second->Id1() << "-" << it->second->Id2()
                       << ") is set with the opposite (" << it2->second->Id1() << "-" << it2->second->Id2() << ")" << std::endl;
-            #endif
+            #endif // DEBUG_REFINE
         }
     }
 
@@ -1775,6 +1907,7 @@ void PolyTree2D::RefineFace(PolyTree2D::FaceType::Pointer pFace,
 
 void PolyTree2D::CoarsenFace(PolyTree2D::FaceType& rFace, PolyTree2D::FaceContainerType& rFaceList) const
 {
+
 }
 
 void PolyTree2D::ReconnectEdges(PolyTree2D::EdgeContainerType& rEdgeList) const
@@ -1838,11 +1971,191 @@ void PolyTree2D::RemoveLoneEdges(PolyTree2D::EdgeContainerType& rEdgeList) const
     rEdgeList.Sort(); // sort after erasing
 }
 
+void PolyTree2D::RemoveLoneVertices(PolyTree2D::VertexContainerType& rVertexList) const
+{
+    std::set<std::size_t> removed_keys;
+    for (VertexContainerType::const_iterator it = rVertexList.begin(); it != rVertexList.end(); ++it)
+    {
+        if (it->pEdge() == NULL)
+        {
+            removed_keys.insert(it->Id());
+        }
+    }
+
+    for (std::set<std::size_t>::iterator it = removed_keys.begin(); it != removed_keys.end(); ++it)
+    {
+        rVertexList.erase(*it);
+    }
+
+    rVertexList.Sort(); // sort after erasing
+}
+
+void PolyTree2D::ExtractEdges(PolyTree2D::FaceType::Pointer pFace,
+        PolyTree2D::EdgeContainerType& rEdgeList) const
+{
+    if (pFace->IsLeaf())
+    {
+        EdgeType::Pointer pFirstEdge = pFace->pEdge();
+        EdgeType::Pointer pEdge = pFirstEdge;
+
+        do
+        {
+            rEdgeList.insert(rEdgeList.begin(), pEdge);
+            pEdge = pEdge->pNextEdge();
+        } while(pEdge != pFirstEdge);
+    }
+    else
+    {
+        for (std::size_t i = 0; i < pFace->NumberOfSubFaces(); ++i)
+            ExtractEdges(pFace->pSubFace(i), rEdgeList);
+    }
+}
+
+void PolyTree2D::ExtractFaces(PolyTree2D::FaceType::Pointer pFace,
+        PolyTree2D::FaceContainerType& rFaceList) const
+{
+    if (pFace->IsLeaf())
+    {
+        rFaceList.insert(rFaceList.begin(), pFace);
+    }
+    else
+    {
+        for (std::size_t i = 0; i < pFace->NumberOfSubFaces(); ++i)
+            ExtractFaces(pFace->pSubFace(i), rFaceList);
+    }
+}
+
+void PolyTree2D::ExtractEdgesAndVertices(PolyTree2D::FaceType::Pointer pFace,
+        PolyTree2D::EdgeContainerType& rOuterEdgeList,
+        PolyTree2D::EdgeContainerType& rInnerEdgeList,
+        PolyTree2D::VertexContainerType& rInnerVertexList,
+        PolyTree2D::FaceContainerType& rInnerFaceList) const
+{
+    if (pFace->IsLeaf())
+    {
+        // if the face is the leaf node of the polytree, everything is simple. To get the edges, one just need to iterate around the face.
+        rOuterEdgeList.clear();
+
+        EdgeType::Pointer pFirstEdge = pFace->pEdge();
+        EdgeType::Pointer pEdge = pFirstEdge;
+
+        do
+        {
+            rOuterEdgeList.push_back(pEdge);
+            pEdge = pEdge->pNextEdge();
+        } while (pEdge != pFirstEdge);
+
+        rInnerEdgeList.clear();
+        rInnerVertexList.clear();
+        rInnerFaceList.clear();
+        rInnerFaceList.push_back(pFace);
+    }
+    else
+    {
+        // in the case that the face is a parent node, thing is more complicated. Firstly all the edges will be collected, and then the inner edges shall be removed.
+        // firstly collect all the faces
+        rInnerFaceList.clear();
+        ExtractFaces(pFace, rInnerFaceList);
+
+        // get all the edges
+        EdgeContainerType pAllEdges;
+        ExtractEdges(pFace, pAllEdges);
+        pAllEdges.Unique();
+
+        // extract the inner edges and outer edges
+        EdgeContainerType pOuterEdges;
+        rInnerEdgeList.clear();
+        rInnerVertexList.clear();
+        for (EdgeContainerType::ptr_iterator it = pAllEdges.ptr_begin(); it != pAllEdges.ptr_end(); ++it)
+        {
+            EdgeGetKeyType::result_type key = EdgeGetKeyType()(*(*it));
+            EdgeGetKeyType::result_type reversed_key(key.second, key.first);
+
+            EdgeContainerType::const_iterator it2 = pAllEdges.find(reversed_key);
+            if (it2 == pAllEdges.end())
+            {
+                pOuterEdges.insert(pOuterEdges.begin(), *it);
+            }
+            else
+            {
+                rInnerEdgeList.insert(rInnerEdgeList.begin(), *it);
+            }
+
+            rInnerVertexList.insert(rInnerVertexList.begin(), (*it)->pNode1());
+            rInnerVertexList.insert(rInnerVertexList.begin(), (*it)->pNode2());
+        }
+
+        rInnerVertexList.Unique();
+
+        // extract the outer edge list, so that it makes a closed loop
+        EdgeType::Pointer pFirstEdge = *(pOuterEdges.ptr_begin());
+        EdgeType::Pointer pEdge = pFirstEdge;
+
+        rOuterEdgeList.clear();
+        do
+        {
+            rOuterEdgeList.push_back(pEdge);
+            EdgeGetKeyType::result_type key = EdgeGetKeyType()(*pEdge);
+
+            bool found = false;
+            for (EdgeContainerType::ptr_iterator it = pOuterEdges.ptr_begin(); it != pOuterEdges.ptr_end(); ++it)
+            {
+                if (*it != pEdge)
+                {
+                    EdgeGetKeyType::result_type key2 = EdgeGetKeyType()(*(*it));
+                    if (key2.first == key.second)
+                    {
+                        found = true;
+                        pEdge = *it;
+                        break;
+                    }
+                }
+            }
+
+            if (!found)
+                KRATOS_THROW_ERROR(std::logic_error, "The next edge is not found. Something is wrong", "")
+        } while(pEdge != pFirstEdge);
+
+        // extract all the inner vertices
+        for (EdgeContainerType::ptr_const_iterator it = rOuterEdgeList.ptr_begin(); it != rOuterEdgeList.ptr_end(); ++it)
+        {
+            rInnerVertexList.erase((*it)->pNode1()->Id());
+            rInnerVertexList.erase((*it)->pNode2()->Id());
+        }
+        rInnerVertexList.Sort();
+    }
+}
+
+void PolyTree2D::Renumber(std::map<std::size_t, std::size_t>& rMapVertices,
+            std::map<std::size_t, std::size_t>& rMapFaces)
+{
+    mLastVertexId = 0;
+    for (VertexContainerType::iterator it = mVertexList.begin(); it != mVertexList.end(); ++it)
+    {
+        ++mLastVertexId;
+        rMapVertices[it->Id()] = mLastVertexId;
+        it->SetId(mLastVertexId);
+    }
+
+    // TODO shall we re-order the vertices to make it more direct-solver-efficiency?
+
+    mLastFaceId = 0;
+    for (FaceContainerType::iterator it = mFaceList.begin(); it != mFaceList.end(); ++it)
+    {
+        ++mLastFaceId;
+        rMapFaces[it->Id()] = mLastFaceId;
+        it->SetId(mLastFaceId);
+    }
+}
+
 void PolyTree2D::Validate() const
 {
     // validate the vertex
     const std::size_t max_iters = 10000;
     std::size_t iter;
+    #ifdef DEBUG_REFINE
+    std::cout << __FUNCTION__ << " initiated" << std::endl;
+    #endif // DEBUG_REFINE
 
     for (VertexContainerType::ptr_const_iterator it = mVertexList.ptr_begin(); it != mVertexList.ptr_end(); ++it)
     {
@@ -1903,6 +2216,10 @@ void PolyTree2D::Validate() const
             KRATOS_THROW_ERROR(std::logic_error, __FUNCTION__, ": The max iteration is exceeded")
     }
 
+    #ifdef DEBUG_REFINE
+    std::cout << "Validate vertices successfully" << std::endl;
+    #endif // DEBUG_REFINE
+
     // validate the half-edge
     for (EdgeContainerType::ptr_const_iterator it = mEdgeList.ptr_begin(); it != mEdgeList.ptr_end(); ++it)
     {
@@ -1947,6 +2264,10 @@ void PolyTree2D::Validate() const
         }
     }
 
+    #ifdef DEBUG_REFINE
+    std::cout << "Validate half-edges successfully" << std::endl;
+    #endif // DEBUG_REFINE
+
     // validate the face
     for (FaceContainerType::ptr_const_iterator it = mFaceList.ptr_begin(); it != mFaceList.ptr_end(); ++it)
     {
@@ -1987,7 +2308,55 @@ void PolyTree2D::Validate() const
         }
     }
 
+    #ifdef DEBUG_REFINE
+    std::cout << "Validate faces successfully" << std::endl;
+    #endif // DEBUG_REFINE
+
     std::cout << "The polytree is validated successfully" << std::endl;
+}
+
+void PolyTree2D::ListVertex(std::ostream& rOStream, const std::size_t& Id) const
+{
+    VertexContainerType::const_iterator it = mVertexList.find(Id);
+    if (it == mVertexList.end())
+    {
+        rOStream << "The vertex " << Id << " does not exist" << std::endl;
+    }
+    else
+    {
+        rOStream << *it << std::endl;
+    }
+}
+
+void PolyTree2D::ListFace(std::ostream& rOStream, const std::size_t& Id) const
+{
+    FaceContainerType::const_iterator it = mFaceList.find(Id);
+    if (it == mFaceList.end())
+    {
+        rOStream << "The face " << Id << " does not exist" << std::endl;
+    }
+    else
+    {
+        rOStream << *it << std::endl;
+    }
+}
+
+void PolyTree2D::ListVertices(std::ostream& rOStream) const
+{
+    for (VertexContainerType::const_iterator it = mVertexList.begin(); it != mVertexList.end(); ++it)
+        rOStream << *it << std::endl;
+}
+
+void PolyTree2D::ListEdges(std::ostream& rOStream) const
+{
+    for (EdgeContainerType::const_iterator it = mEdgeList.begin(); it != mEdgeList.end(); ++it)
+        rOStream << *it << std::endl;
+}
+
+void PolyTree2D::ListFaces(std::ostream& rOStream) const
+{
+    for (FaceContainerType::const_iterator it = mFaceList.begin(); it != mFaceList.end(); ++it)
+        rOStream << *it << std::endl;
 }
 
 void PolyTree2D::WriteMatlab(std::ostream& rOStream,
@@ -2001,29 +2370,40 @@ void PolyTree2D::WriteMatlab(std::ostream& rOStream,
                 max_number_of_nodes = it->NumberOfNodes();
     }
 
+    rOStream << "Vertices = [";
+    std::vector<std::size_t> vertex_ids;
+    std::map<std::size_t, std::size_t> map_vertex; // map from vertex id to matlab row
+    std::size_t row = 0;
+    for (VertexContainerType::const_iterator it = mVertexList.begin(); it != mVertexList.end(); ++it)
+    {
+        rOStream << (*it)[0] << " " << (*it)[1] << ";" << std::endl;
+        map_vertex[it->Id()] = ++row;
+        if (write_vertex_number) vertex_ids.push_back(it->Id());
+    }
+    rOStream << "];" << std::endl;
+
     rOStream << "Faces = [";
     std::vector<std::size_t> face_ids;
     for (FaceContainerType::const_iterator it = mFaceList.begin(); it != mFaceList.end(); ++it)
     {
         if (it->IsActive())
         {
-            rOStream << it->VertexInfo();
+            // rOStream << it->VertexInfo();
+            typename EdgeType::Pointer pFirstEdge = it->pEdge();
+            typename EdgeType::Pointer pEdge = pFirstEdge;
+
+            do
+            {
+                rOStream << map_vertex[pEdge->pNode1()->Id()] << " ";
+                pEdge = pEdge->pNextEdge();
+            } while (pEdge != pFirstEdge);
+
+            // appending NaN information
             for (std::size_t i = 0; i < max_number_of_nodes - it->NumberOfNodes(); ++i)
                 rOStream << " NaN";
             rOStream << ";" << std::endl;
-            if (write_face_number)
-                face_ids.push_back(it->Id());
+            if (write_face_number) face_ids.push_back(it->Id());
         }
-    }
-    rOStream << "];" << std::endl;
-
-    rOStream << "Vertices = [";
-    std::vector<std::size_t> vertex_ids;
-    for (VertexContainerType::const_iterator it = mVertexList.begin(); it != mVertexList.end(); ++it)
-    {
-        rOStream << (*it)[0] << " " << (*it)[1] << ";" << std::endl;
-        if (write_vertex_number)
-            vertex_ids.push_back(it->Id());
     }
     rOStream << "];" << std::endl;
 
@@ -2069,3 +2449,4 @@ void PolyTree2D::WriteMatlab(std::ostream& rOStream,
 }  // namespace Kratos.
 
 #undef DEBUG_REFINE
+#undef DEBUG_COARSEN

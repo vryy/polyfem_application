@@ -28,10 +28,14 @@ class PolyTreeRefinementUtility:
         self.tree = PolyTree2D()
         self.tree.Synchronize(model_part, True)
         print("PolyTree " + str(self.name) + " is read successfully from model_part")
+        print("################################################")
+        print("###### " + self.name + " REFINE APP")
+        print("################################################")
         self.help = """Commands:
     h - print this help
-    r - follow by number to indicate which face will be refined, i.e. r,1,2,3
-    c - follow by number to indicate which face will be refined, i.e. c,1,2,3
+    a - probe the parent face (if has) of a specific face, e.g. a,1,2
+    r - follow by number to indicate which face will be refined, e.g. r,1,2,3
+    c - follow by number to indicate which face will be refined, e.g. c,1,2,3
     f - begin and finalize the refine/coarsen operation
     v - validate the tree
     t - print the tree
@@ -41,6 +45,7 @@ class PolyTreeRefinementUtility:
     q - quit the application
     Note: all command must be separated by comma"""
         self.operations = []
+        self.cmd_history = "h"
 
     def Loop(self):
         while True:
@@ -74,23 +79,28 @@ class PolyTreeRefinementUtility:
                         break
                 if dat == 'r':
                     print("Faces to be refined: " + str(num))
+                    self.cmd_history = self.cmd_history + ',r'
                     refined_face = []
                     for f in num:
                         err = self.tree.MarkFaceRefine(f)
                         if err == 0:
                             refined_face.append(f)
+                            self.cmd_history = self.cmd_history + ',' + str(f)
                     self.operations.append(['r', refined_face])
                 elif dat == 'c':
                     print("Faces to be coarsen: " + str(num))
+                    self.cmd_history = self.cmd_history + ',c'
                     coarsen_face = []
                     for f in num:
                         err = self.tree.MarkFaceCoarsen(f)
                         if err == 0:
                             coarsen_face.append(f)
+                            self.cmd_history = self.cmd_history + ',' + str(f)
                     self.operations.append(['c', coarsen_face])
             elif dat == 'f':
                 self.tree.BeginRefineCoarsen()
                 self.tree.EndRefineCoarsen()
+                self.cmd_history = self.cmd_history + ",f"
             elif dat == 'b':
                 cnt = cnt + 1
                 if IsFloat(cmd_str[cnt]):
@@ -98,14 +108,43 @@ class PolyTreeRefinementUtility:
                     self.tree.SetValue(MERGE_PARAMETER, mp)
                     self.operations.append(['b', mp])
                     print("MERGE_PARAMETER is set to " + str(mp))
+                    self.cmd_history = self.cmd_history + ',b,' + str(mp)
             elif dat == 'v':
                 self.tree.Validate()
             elif dat == 't':
                 print(self.tree)
             elif dat == 'p':
                 self.WriteToPython()
+                self.cmd_history = self.cmd_history + ',p'
             elif dat == 'm':
                 self.WriteToMatlab()
+                self.cmd_history = self.cmd_history + ',m'
+            elif dat == 'lv' or dat == 'lf' or dat == 'le': # list vertex or face or edge
+                cnt = cnt + 1
+                num = []
+                while cnt < len(cmd_str):
+                    if IsInt(cmd_str[cnt]):
+                        num.append(int(cmd_str[cnt]))
+                        cnt = cnt + 1
+                    else:
+                        cnt = cnt - 1
+                        break
+                if dat == "lf":
+                    if num != []:
+                        print("Faces to be listed: " + str(num))
+                        for f in num:
+                            self.tree.ListFace(f)
+                    else:
+                        self.tree.ListFaces()
+                elif dat == "lv":
+                    if num != []:
+                        print("Vertices to be listed: " + str(num))
+                        for v in num:
+                            self.tree.ListVertex(v)
+                    else:
+                        self.tree.ListVertices()
+                elif dat == "le":
+                    self.tree.ListEdges()
             cnt = cnt + 1
         return 0
 
@@ -135,7 +174,8 @@ class PolyTreeRefinementUtility:
         ifile.write("import " + self.name + "_include\n")
         ifile.write("from " + self.name + "_include import *\n")
         ifile.write("model = " + self.name + "_include.Model('" + self.name + "',os.getcwd()+'/')\n")
-        ifile.write("model.InitializeModel()\n\n")
+        ifile.write("model.InitializeModel()\n")
+        ifile.write("#command: " + self.cmd_history + "\n\n")
         ifile.write("tree = PolyTree2D()\n")
         ifile.write("tree.Synchronize(model.model_part, True)\n\n")
         for op in self.operations:

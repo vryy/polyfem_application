@@ -116,6 +116,30 @@ void PolyTree2D_WriteMatlabToFile(PolyTree2D& dummy, std::string filename,
     outfile.close();
 }
 
+void PolyTree2D_ListVertex(PolyTree2D& dummy, const std::size_t Id)
+{
+    dummy.ListVertex(std::cout, Id);
+}
+
+void PolyTree2D_ListFace(PolyTree2D& dummy, const std::size_t Id)
+{
+    dummy.ListFace(std::cout, Id);
+}
+
+void PolyTree2D_ListVertices(PolyTree2D& dummy)
+{
+    dummy.ListVertices(std::cout);
+}
+
+void PolyTree2D_ListEdges(PolyTree2D& dummy)
+{
+    dummy.ListEdges(std::cout);
+}
+
+void PolyTree2D_ListFaces(PolyTree2D& dummy)
+{
+    dummy.ListFaces(std::cout);
+}
 
 void PolyFEMApplication_AddCustomUtilitiesToPython()
 {
@@ -191,6 +215,11 @@ void PolyFEMApplication_AddCustomUtilitiesToPython()
     .def("EndRefineCoarsen", &PolyTree2D::EndRefineCoarsen)
     .def("Validate", &PolyTree2D::Validate)
     .def("WriteMatlab", &PolyTree2D_WriteMatlabToFile)
+    .def("ListVertex", &PolyTree2D_ListVertex)
+    .def("ListFace", &PolyTree2D_ListFace)
+    .def("ListVertices", &PolyTree2D_ListVertices)
+    .def("ListEdges", &PolyTree2D_ListEdges)
+    .def("ListFaces", &PolyTree2D_ListFaces)
     .def(self_ns::str(self))
     ;
 

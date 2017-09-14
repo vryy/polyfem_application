@@ -239,7 +239,8 @@ public:
             voronoi_coordinates.clear();
             voronoi_connectivities.clear();
             ComputeVoronoiTesselation(voronoi_coordinates, voronoi_connectivities, 2, seed_coordinates);
-            std::cout << "   ComputeVoronoiTesselation completed" << std::endl;
+            if (debug_level > 0)
+                std::cout << "   ComputeVoronoiTesselation completed" << std::endl;
 
             if (debug_level > 3)
             {

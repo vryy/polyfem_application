@@ -125,6 +125,9 @@ public:
     /// Returns the id of the associated node
     const std::size_t& Id() const {return mId;}
 
+    /// Set the Id
+    void SetId(const std::size_t& Id) {mId = Id;}
+
     /// Set the coordinate in direction i
     void SetCoordinate(const std::size_t& i, const double& x)
     {
@@ -491,6 +494,9 @@ public:
     /// Returns the id of the associated face
     const std::size_t& Id() const {return mId;}
 
+    /// Set the Id
+    void SetId(const std::size_t& Id) {mId = Id;}
+
     /// Get/Set for the underlying half-edge
     EdgeType& Edge() {return *pEdge();}
     const EdgeType& Edge() const {return *pEdge();}
@@ -511,6 +517,23 @@ public:
         mpSubFaces.resize(pSubFaces.size());
         for (std::size_t i = 0; i < pSubFaces.size(); ++i)
             mpSubFaces[i] = pSubFaces[i];
+    }
+
+    /**
+     * Clear the sub-faces
+     * @param r_clear_list set of sub-faces has been clear
+     */
+    void ClearSubFaces(std::set<std::size_t>& r_clear_list)
+    {
+        for (std::size_t i = 0; i < NumberOfSubFaces(); ++i)
+        {
+            if (pSubFace(i) != NULL)
+            {
+                pSubFace(i)->ClearSubFaces(r_clear_list);
+                r_clear_list.insert(pSubFace(i)->Id());
+            }
+        }
+        mpSubFaces.clear();
     }
 
     /// Check if this tree is a leaf

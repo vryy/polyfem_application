@@ -59,9 +59,10 @@ public:
     {
         UNINITIALIZED = 0,
         INITIALIZED = 1,
-        CACHED = 2,
-        FINALIZED_READY = 3,
-        FINALIZED = 4
+        CACHED_REFINE = 2,
+        CACHED_COARSEN = 3,
+        FINALIZED_READY = 4,
+        FINALIZED = 5
     };
 
     /// Pointer definition of PolyTree2D
@@ -145,9 +146,49 @@ public:
     void EndRefineCoarsen();
 
     /**
+     * Re-set the Id of all the vertices and the faces
+     * @param rMapVertices the map from old vertex Id to new vertex Id
+     * @param rMapFaces    the map from old face Id to new face Id
+     */
+    void Renumber(std::map<std::size_t, std::size_t>& rMapVertices,
+            std::map<std::size_t, std::size_t>& rMapFaces);
+
+    /**
      * Perform various checking on the validity of the tree
      */
     void Validate() const;
+
+    /**
+     * List the face
+     * @param rOStream output stream
+     * @param Id id of the face
+     */
+    void ListVertex(std::ostream& rOStream, const std::size_t& Id) const;
+
+    /**
+     * List the face
+     * @param rOStream output stream
+     * @param Id id of the face
+     */
+    void ListFace(std::ostream& rOStream, const std::size_t& Id) const;
+
+    /**
+     * List all vertices of the polytree
+     * @param rOStream output stream
+     */
+    void ListVertices(std::ostream& rOStream) const;
+
+    /**
+     * List all edges of the polytree
+     * @param rOStream output stream
+     */
+    void ListEdges(std::ostream& rOStream) const;
+
+    /**
+     * List all faces of the polytree
+     * @param rOStream output stream
+     */
+    void ListFaces(std::ostream& rOStream) const;
 
     /**
      * Export the tree for visualization in Matlab
@@ -286,6 +327,40 @@ private:
      * @param rEdgeList the processing edge list
      */
     void RemoveLoneEdges(EdgeContainerType& rEdgeList) const;
+
+    /**
+     * Remove the lone vertices in the vertex list. The lone vertex is the vertex that has no edge.
+     * @param rVertexList the processing vertex list
+     */
+    void RemoveLoneVertices(VertexContainerType& rVertexList) const;
+
+    /**
+     * Extract the edges of the face and all the sub-faces
+     * @param pFace     the input face
+     * @param rFaceList the list of face
+     */
+    void ExtractEdges(FaceType::Pointer pFace, EdgeContainerType& rEdgeList) const;
+
+    /**
+     * Extract the face and all the sub-faces
+     * @param pFace     the input face
+     * @param rFaceList the list of face
+     */
+    void ExtractFaces(FaceType::Pointer pFace, FaceContainerType& rFaceList) const;
+
+    /**
+     * Extract the list of edges around a face. This function shall only be called after EndRefineCoarsen
+     * @param pFace            the input face
+     * @param rOuterEdgeList   the list of all outer edges. This is organized to make a closed loop.
+     * @param rInnerEdgeList   the list of all inner edges (unorganized)
+     * @param rInnerVertexList the list of all inner vertices (unorganized)
+     * @param rInnerFaceList   the list of all inner faces (unorganized)
+     */
+    void ExtractEdgesAndVertices(FaceType::Pointer pFace,
+            EdgeContainerType& rOuterEdgeList,
+            EdgeContainerType& rInnerEdgeList,
+            VertexContainerType& rInnerVertexList,
+            FaceContainerType& rInnerFaceList) const;
 
     /// Assignment operator.
     PolyTree2D& operator=(PolyTree2D const& rOther);
