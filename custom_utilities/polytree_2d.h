@@ -34,7 +34,6 @@
 #include "utilities/pair_indexed_object.h"
 #include "containers/pointer_vector_set.h"
 #include "containers/data_value_container.h"
-#include "includes/model_part.h"
 #include "poly_half_edge.h"
 
 
@@ -72,17 +71,19 @@ public:
     typedef EdgeType::VertexType VertexType;
     typedef PolyFace<2> FaceType;
 
-    // typedef std::map<std::size_t, VertexType::Pointer> VertexContainerType;
     typedef PointerVectorSet<VertexType, IndexedObject> VertexContainerType;
 
     typedef PairIndexedObject EdgeGetKeyType;
     typedef PointerVectorSet<EdgeType, EdgeGetKeyType, PairIndexedObjectCompare, PairIndexedObjectEqual> EdgeContainerType;
 
-    // typedef std::list<FaceType::Pointer> FaceContainerType;
     typedef PointerVectorSet<FaceType, IndexedObject> FaceContainerType;
 
     /// Default constructor.
-    PolyTree2D() : mLastVertexId(0), mLastFaceId(0) {}
+    PolyTree2D() : mLastVertexId(0), mLastFaceId(0)
+    , mpVertexList(new VertexContainerType())
+    , mpEdgeList(new EdgeContainerType())
+    , mpFaceList(new FaceContainerType())
+    {}
 
     /// Destructor.
     virtual ~PolyTree2D()
@@ -98,24 +99,35 @@ public:
     /**
      * @return the last vertex id of the polygon tree
      */
-    std::size_t LastVertexId() const {return mLastVertexId;}
+    std::size_t& LastVertexId() {return mLastVertexId;}
+    const std::size_t& LastVertexId() const {return mLastVertexId;}
 
     /**
      * @return the last face id of the polygon tree
      */
-    std::size_t LastFaceId() const {return mLastFaceId;}
+    std::size_t& LastFaceId() {return mLastFaceId;}
+    const std::size_t& LastFaceId() const {return mLastFaceId;}
+
+    /// Get & Set for vertex container
+    VertexContainerType& Vertices() {return *mpVertexList;}
+    VertexContainerType::Pointer pVertices() {return mpVertexList;}
+    void SetVertices(typename VertexContainerType::Pointer pOtherVertices) {mpVertexList = pOtherVertices;}
+
+    /// Get & Set for edge container
+    EdgeContainerType& Edges() {return *mpEdgeList;}
+    EdgeContainerType::Pointer pEdges() {return mpEdgeList;}
+    void SetEdges(typename EdgeContainerType::Pointer pOtherEdges) {mpEdgeList = pOtherEdges;}
+
+    /// Get & Set for face container
+    FaceContainerType& Faces() {return *mpFaceList;}
+    FaceContainerType::Pointer pFaces() {return mpFaceList;}
+    void SetFaces(typename FaceContainerType::Pointer pOtherFaces) {mpFaceList = pOtherFaces;}
 
     /**
      * Create a new face with Id // Do not use this in simulation, this is only for debugging
      * @param Id the id
      */
     FaceType::Pointer CreateFace(const std::size_t& Id);
-
-    /**
-     * Synchronize the half-edge data structure with ModelPart
-     * @param r_model_part the input ModelPart
-     */
-    void Synchronize(ModelPart& r_model_part, bool forward);
 
     /**
      * Mark a face to refine
@@ -144,6 +156,16 @@ public:
      * Finalize refine operations
      */
     void EndRefineCoarsen();
+
+    /**
+     * Set the initialized state for the polytree
+     */
+    void SetInitialized() {m_half_edge_state = INITIALIZED;}
+
+    /**
+     * @return true if the tree is done with all refine/coarsen operations and ready to provide relevant information
+     */
+    bool IsFinalized() const {return m_half_edge_state == FINALIZED;}
 
     /**
      * Re-set the Id of all the vertices and the faces
@@ -214,19 +236,19 @@ public:
     virtual void PrintData(std::ostream& rOStream) const
     {
         rOStream << " Vertices:" << std::endl;
-        for (VertexContainerType::const_iterator it = mVertexList.begin(); it != mVertexList.end(); ++it)
+        for (VertexContainerType::const_iterator it = mpVertexList->begin(); it != mpVertexList->end(); ++it)
         {
             rOStream << "  " << *it << std::endl;
         }
 
         rOStream << " Edges:" << std::endl;
-        for (EdgeContainerType::const_iterator it = mEdgeList.begin(); it != mEdgeList.end(); ++it)
+        for (EdgeContainerType::const_iterator it = mpEdgeList->begin(); it != mpEdgeList->end(); ++it)
         {
             rOStream << "  " << *it << std::endl;
         }
 
         rOStream << " Faces:" << std::endl;
-        for (FaceContainerType::const_iterator it = mFaceList.begin(); it != mFaceList.end(); ++it)
+        for (FaceContainerType::const_iterator it = mpFaceList->begin(); it != mpFaceList->end(); ++it)
         {
             rOStream << "  " << *it << std::endl;
         }
@@ -235,29 +257,16 @@ public:
 private:
 
     /// Internal variables
-    VertexContainerType mVertexList;
-    EdgeContainerType mEdgeList;
+    VertexContainerType::Pointer mpVertexList;
+    EdgeContainerType::Pointer mpEdgeList;
     EdgeContainerType mNewEdgeList; // container to contain newly created half-edges, will be deleted after EndRefineCoarsen
     EdgeContainerType mCompositeEdgeList; // container to contain newly created composite half-edges for merge operation, will be deleted after EndRefineCoarsen
-    FaceContainerType mFaceList;
+    FaceContainerType::Pointer mpFaceList;
 
     HalfEdgeStates m_half_edge_state;
 
     std::size_t mLastVertexId;
     std::size_t mLastFaceId;
-
-    /**
-     * Initialize the half edge data structure from ModelPart
-     * @param r_model_part the input ModelPart
-     * @param rVertexList  the output list of vertices
-     * @param rEdgeList    the output list of edges
-     * @param rFaceList    the output list of faces
-     */
-    void InitializeHalfEdges(ModelPart& r_model_part,
-            VertexContainerType& rVertexList,
-            EdgeContainerType& rEdgeList,
-            FaceContainerType& rFaceList,
-            std::size_t& LastVertexId, std::size_t& LastFaceId) const;
 
     /**
      * Refine an edge by adding a vertex in the middle

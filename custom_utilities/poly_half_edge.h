@@ -153,7 +153,7 @@ public:
     /// Print information about this object.
     virtual void PrintInfo(std::ostream& rOStream) const
     {
-        // rOStream << Info();
+        rOStream << Info();
     }
 
     /// Print object's data.
@@ -856,24 +856,6 @@ inline std::ostream& operator << (std::ostream& rOStream, const PolyVertex<TDim>
 
     return rOStream;
 }
-
-// /// input stream function
-// template<std::size_t TDim>
-// inline std::istream& operator >> (std::istream& rIStream, PolySuperVertex<TDim>& rThis)
-// {
-//     return rIStream;
-// }
-
-// /// output stream function
-// template<std::size_t TDim>
-// inline std::ostream& operator << (std::ostream& rOStream, const PolySuperVertex<TDim>& rThis)
-// {
-//     rThis.PrintInfo(rOStream);
-//     rOStream << " ";
-//     rThis.PrintData(rOStream);
-
-//     return rOStream;
-// }
 
 /// input stream function
 template<std::size_t TDim>

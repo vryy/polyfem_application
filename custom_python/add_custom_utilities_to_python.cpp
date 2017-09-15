@@ -17,6 +17,8 @@
 #include "custom_utilities/poly_half_edge.h"
 #include "custom_utilities/polytree_2d.h"
 #include "custom_utilities/polytree_utility.h"
+#include "custom_utilities/polytree_sync_utility.h"
+#include "python/pointer_vector_set_python_interface.h"
 
 
 namespace Kratos
@@ -51,6 +53,17 @@ void PolyFEMUtility_AddElement(PolyFEMUtility& rDummy, ModelPart::ElementsContai
         Element::Pointer pElement)
 {
     rDummy.AddElement(rpElements, pElement);
+}
+
+void PolyTreeSyncUtility_InitializeHalfEdges(PolyTreeSyncUtility& rDummy, ModelPart& r_model_part, PolyTree2D& r_tree)
+{
+    std::cout << "Constructing half-edge data structure from ModelPart " << r_model_part.Name() << std::endl;
+    rDummy.InitializeHalfEdges(r_model_part, r_tree.Vertices(), r_tree.Edges(), r_tree.Faces(), r_tree.LastVertexId(), r_tree.LastFaceId());
+    r_tree.SetInitialized();
+    std::cout << "Constructing half-edge data structure completed " << std::endl;
+    std::cout << "Number of vertices: " << r_tree.Vertices().size() << std::endl;
+    std::cout << "Number of half-edges: " << r_tree.Edges().size() << std::endl;
+    std::cout << "Number of faces: " << r_tree.Faces().size() << std::endl;
 }
 
 //////////////////////////////////////
@@ -102,10 +115,18 @@ std::size_t PolyHalfEdge_HashCode(PolyHalfEdge<TDim>& dummy)
 }
 
 template<std::size_t TDim>
+std::size_t PolyFace_Id(PolyFace<TDim>& dummy)
+{
+    return dummy.Id();
+}
+
+template<std::size_t TDim>
 std::size_t PolyFace_HashCode(PolyFace<TDim>& dummy)
 {
     return PolyHash<TDim>{}(dummy);
 }
+
+//////////////////////////////////////////////////
 
 void PolyTree2D_WriteMatlabToFile(PolyTree2D& dummy, std::string filename,
         bool write_vertex_number, bool write_face_number)
@@ -114,6 +135,18 @@ void PolyTree2D_WriteMatlabToFile(PolyTree2D& dummy, std::string filename,
     outfile.open(filename.c_str());
     dummy.WriteMatlab(outfile, write_vertex_number, write_face_number);
     outfile.close();
+}
+
+std::size_t PolyTree2D_LastVertexId(PolyTree2D& dummy)
+{
+    std::size_t LastVertexId = dummy.LastVertexId();
+    return LastVertexId;
+}
+
+std::size_t PolyTree2D_LastFaceId(PolyTree2D& dummy)
+{
+    std::size_t LastFaceId = dummy.LastFaceId();
+    return LastFaceId;
 }
 
 void PolyTree2D_ListVertex(PolyTree2D& dummy, const std::size_t Id)
@@ -140,6 +173,38 @@ void PolyTree2D_ListFaces(PolyTree2D& dummy)
 {
     dummy.ListFaces(std::cout);
 }
+
+PolyTree2D::VertexContainerType::Pointer PolyTree2D_GetVertices(PolyTree2D& dummy)
+{
+    return dummy.pVertices();
+}
+
+void PolyTree2D_SetVertices(PolyTree2D& dummy, PolyTree2D::VertexContainerType::Pointer pOtherVertices)
+{
+    dummy.SetVertices(pOtherVertices);
+}
+
+PolyTree2D::EdgeContainerType::Pointer PolyTree2D_GetEdges(PolyTree2D& dummy)
+{
+    return dummy.pEdges();
+}
+
+void PolyTree2D_SetEdges(PolyTree2D& dummy, PolyTree2D::EdgeContainerType::Pointer pOtherEdges)
+{
+    dummy.SetEdges(pOtherEdges);
+}
+
+PolyTree2D::FaceContainerType::Pointer PolyTree2D_GetFaces(PolyTree2D& dummy)
+{
+    return dummy.pFaces();
+}
+
+void PolyTree2D_SetFaces(PolyTree2D& dummy, PolyTree2D::FaceContainerType::Pointer pOtherFaces)
+{
+    dummy.SetFaces(pOtherFaces);
+}
+
+////////////////////////////////////////////////////
 
 void PolyFEMApplication_AddCustomUtilitiesToPython()
 {
@@ -199,16 +264,22 @@ void PolyFEMApplication_AddCustomUtilitiesToPython()
 
     class_<PolyFace<2>, PolyFace<2>::Pointer, boost::noncopyable>
     ("PolyFace2D", init<const std::size_t&>())
+    .def("Id", &PolyFace_Id<2>)
     .def("HashCode", &PolyFace_HashCode<2>)
     .def(self_ns::str(self))
     ;
 
     class_<PolyTree2D, PolyTree2D::Pointer, bases<DataValueContainer>, boost::noncopyable>
     ("PolyTree2D", init<>())
-    .def("LastVertexId", &PolyTree2D::LastVertexId)
-    .def("LastFaceId", &PolyTree2D::LastFaceId)
+    .def("LastVertexId", &PolyTree2D_LastVertexId)
+    .def("LastFaceId", &PolyTree2D_LastFaceId)
+    .add_property("Vertices", PolyTree2D_GetVertices, PolyTree2D_SetVertices)
+    .add_property("Edges", PolyTree2D_GetEdges, PolyTree2D_SetEdges)
+    .add_property("Faces", PolyTree2D_GetFaces, PolyTree2D_SetFaces)
+    .def("VerticesArray", &PolyTree2D::Vertices, return_internal_reference<>())
+    .def("EdgesArray", &PolyTree2D::Edges, return_internal_reference<>())
+    .def("FacesArray", &PolyTree2D::Faces, return_internal_reference<>())
     .def("CreateFace", &PolyTree2D::CreateFace)
-    .def("Synchronize", &PolyTree2D::Synchronize)
     .def("MarkFaceRefine", &PolyTree2D::MarkFaceRefine)
     .def("MarkFaceCoarsen", &PolyTree2D::MarkFaceCoarsen)
     .def("BeginRefineCoarsen", &PolyTree2D::BeginRefineCoarsen)
@@ -223,6 +294,10 @@ void PolyFEMApplication_AddCustomUtilitiesToPython()
     .def(self_ns::str(self))
     ;
 
+    PointerVectorSetPythonInterface<PolyTree2D::VertexContainerType>::CreateInterface("PolyTree2DVertexArray");
+    PointerVectorSetPythonInterface<PolyTree2D::EdgeContainerType>::CreateInterface("PolyTree2DEdgeArray");
+    PointerVectorSetPythonInterface<PolyTree2D::FaceContainerType>::CreateInterface("PolyTree2DFaceArray");
+
     //////////////////////////////////////////////////////////////////////////
 
     class_<PolyTreeUtility, PolyTreeUtility::Pointer, boost::noncopyable>
@@ -233,6 +308,14 @@ void PolyFEMApplication_AddCustomUtilitiesToPython()
     .def("TestClusterPoints1", &PolyTreeUtility::TestClusterPoints1)
     .def("TestClusterPoints2", &PolyTreeUtility::TestClusterPoints2)
     .def("TestClusterLengths1", &PolyTreeUtility::TestClusterLengths1)
+    .def(self_ns::str(self))
+    ;
+
+    //////////////////////////////////////////////////////////////////////////
+
+    class_<PolyTreeSyncUtility, PolyTreeSyncUtility::Pointer, boost::noncopyable>
+    ("PolyTreeSyncUtility", init<>())
+    .def("InitializeHalfEdges", &PolyTreeSyncUtility_InitializeHalfEdges)
     .def(self_ns::str(self))
     ;
 
