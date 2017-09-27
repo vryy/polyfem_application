@@ -110,16 +110,19 @@ public:
 
     /// Get & Set for vertex container
     VertexContainerType& Vertices() {return *mpVertexList;}
+    const VertexContainerType& Vertices() const {return *mpVertexList;}
     VertexContainerType::Pointer pVertices() {return mpVertexList;}
     void SetVertices(typename VertexContainerType::Pointer pOtherVertices) {mpVertexList = pOtherVertices;}
 
     /// Get & Set for edge container
     EdgeContainerType& Edges() {return *mpEdgeList;}
+    const EdgeContainerType& Edges() const {return *mpEdgeList;}
     EdgeContainerType::Pointer pEdges() {return mpEdgeList;}
     void SetEdges(typename EdgeContainerType::Pointer pOtherEdges) {mpEdgeList = pOtherEdges;}
 
     /// Get & Set for face container
     FaceContainerType& Faces() {return *mpFaceList;}
+    const FaceContainerType& Faces() const {return *mpFaceList;}
     FaceContainerType::Pointer pFaces() {return mpFaceList;}
     void SetFaces(typename FaceContainerType::Pointer pOtherFaces) {mpFaceList = pOtherFaces;}
 
@@ -166,6 +169,11 @@ public:
      * @return true if the tree is done with all refine/coarsen operations and ready to provide relevant information
      */
     bool IsFinalized() const {return m_half_edge_state == FINALIZED;}
+
+    /**
+     * @return true if the tree is done with all refine/coarsen operations or is just initialized from model_part, and ready to provide relevant information
+     */
+    bool IsReadyForSynchronization() const {return (m_half_edge_state == FINALIZED) || (m_half_edge_state == INITIALIZED);}
 
     /**
      * Re-set the Id of all the vertices and the faces
@@ -218,7 +226,14 @@ public:
      * @param write_vertex_number flag to write the number to the vertex
      * @param write_face_number   flag to write the number to the face
      */
-    void WriteMatlab(std::ostream& rOStream, const bool& write_vertex_number, const bool& write_face_number) const;
+    void WriteMatlab(std::ostream& rOStream, const bool& write_vertex_number, const bool& write_face_number, const bool& include_lone_node) const;
+
+    /**
+     * Export the tree to mdpa file (for debugging)
+     * @param rOStream output stream
+     * @param ele_prefix   element prefix name
+     */
+    void WriteMdpa(std::ostream& rOStream, const std::string& ele_prefix, const std::size_t& prop_id) const;
 
     /// Turn back information as a string.
     virtual std::string Info() const

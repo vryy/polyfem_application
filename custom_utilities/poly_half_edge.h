@@ -144,6 +144,9 @@ public:
     typename EdgeType::Pointer pEdge() {return mpEdge.lock();} // use this for get
     void pSetEdge(typename EdgeType::Pointer pEdge) {mpEdge = pEdge;} // use this for set
 
+    /// Check if this vertex is a lone vertex. A lone vertex is a vertex that has no associated edge.
+    const bool IsLonely() const {return pEdge() == NULL;}
+
     /// Turn back information as a string.
     virtual std::string Info() const
     {
@@ -468,6 +471,15 @@ class PolyFace
 {
 public:
 
+    enum PolyFaceState
+    {
+        NORMAL,
+        NEW_BORN,
+        RESURRECTED,
+        CHANGED,
+        SLEEP
+    };
+
     /// Pointer definition of PolyFace
     KRATOS_CLASS_POINTER_DEFINITION(PolyFace);
 
@@ -476,11 +488,11 @@ public:
     typedef PolyFace<TDim> FaceType;
 
     /// Empty constructor for serializer.
-    PolyFace() : mId(0), m_is_active(true), m_is_refined(false), m_is_coarsen(false), m_is_changed(false) {}
+    PolyFace() : mId(0), m_is_active(true), m_is_refined(false), m_is_coarsen(false), m_state(NEW_BORN) {}
 
     /// Default constructor.
     PolyFace(const std::size_t& Id)
-    : mId(Id), m_is_active(true), m_is_refined(false), m_is_coarsen(false), m_is_changed(false)
+    : mId(Id), m_is_active(true), m_is_refined(false), m_is_coarsen(false), m_state(NEW_BORN)
     {}
 
     /// Destructor.
@@ -545,8 +557,8 @@ public:
     const FaceType::Pointer pSubFace(const std::size_t& i) const {return mpSubFaces[i].lock();} // use this for get
     FaceType::Pointer pSubFace(const std::size_t& i) {return mpSubFaces[i].lock();} // use this for get
 
-    bool IsChanged() const {return m_is_changed;}
-    void SetChange(const bool& is_changed) {m_is_changed = is_changed;}
+    PolyFaceState State() const {return m_state;}
+    void SetState(const PolyFaceState& state) {m_state = state;}
 
     bool IsRefined() const {return m_is_refined;}
     void SetRefine(const bool& is_refined) {m_is_refined = is_refined;}
@@ -636,7 +648,6 @@ public:
 
         return number_of_edges;
     }
-
     
     /**
      * Extract the minimal polygon from this face. This polygon does not contain middle nodes on edge.
@@ -687,6 +698,28 @@ public:
         } while (pNextEdge != pFirstEdge->pNextEdge());
     }
 
+    /**
+     * Get the connectivity of the polygon face
+     */
+    std::vector<std::size_t> GetConnectivity() const
+    {
+        std::vector<std::size_t> connectivity;
+
+        typename EdgeType::Pointer pFirstEdge = pEdge();
+        typename EdgeType::Pointer pEdge = pFirstEdge;
+
+        if (pEdge == NULL)
+            return connectivity;
+
+        do
+        {
+            connectivity.push_back(pEdge->pNode1()->Id());
+            pEdge = pEdge->pNextEdge();
+        } while (pEdge != pFirstEdge);
+
+        return connectivity;
+    }
+
     /// Get the string representing the vertices on the polygon (not counting the one on the edge)
     std::string VertexInfo() const
     {
@@ -732,6 +765,11 @@ public:
 
         return ss.str();
     }
+
+    /// Get/Set for historical inner faces
+    void ClearHistoricalInnerFaces() {m_historical_inner_faces.clear();}
+    void SetHistoricalInnerFaces(const std::vector<std::size_t>& faces) {m_historical_inner_faces = faces;}
+    const std::vector<std::size_t>& HistoricalInnerFaces() const {return m_historical_inner_faces;}
 
     /// Turn back information as a string.
     virtual std::string Info() const
@@ -780,7 +818,7 @@ public:
     PolyFace& operator=(PolyFace const& rOther)
     {
         mId = rOther.mId;
-        m_is_changed = rOther.m_is_changed;
+        m_state = rOther.m_state;
         m_is_refined = rOther.m_is_refined;
         mpEdge = rOther.mpEdge;
     }
@@ -789,7 +827,7 @@ public:
     PolyFace(PolyFace const& rOther)
     {
         mId = rOther.mId;
-        m_is_changed = rOther.m_is_changed;
+        m_state = rOther.m_state;
         m_is_refined = rOther.m_is_refined;
         mpEdge = rOther.mpEdge;
     }
@@ -809,7 +847,7 @@ private:
 
     std::size_t mId;
 
-    bool m_is_changed; // flag to mark if this face is changed
+    PolyFaceState m_state; // state flag of the face. It is useful to generate element from outside code.
 
     bool m_is_refined; // flag to mark if this face is about to be refined
     
@@ -825,6 +863,13 @@ private:
 
     std::vector<typename FaceType::WeakPointer> mpSubFaces; // list of sub-faces (in polytree)
     // if mpSubFaces.size() is nonzero then the mpEdge must be NULL, because at this time the face is not at the bottom of the tree anymore.
+
+    // this array is an intermediate one. It stores the list of inner faces
+    // of this face in the previous refinement step. Caller should store
+    // and clear it after used. This variable is not designed as a concrete attribute of the PolyFace.
+    // This variable is useful for synchronization after coarsening. Since the element from model_part will
+    // be used to restore the stress on this face after coarsening.
+    std::vector<std::size_t> m_historical_inner_faces;
 
     friend class Serializer;
 

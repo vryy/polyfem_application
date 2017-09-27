@@ -66,6 +66,19 @@ void PolyTreeSyncUtility_InitializeHalfEdges(PolyTreeSyncUtility& rDummy, ModelP
     std::cout << "Number of faces: " << r_tree.Faces().size() << std::endl;
 }
 
+boost::python::list PolyTreeSyncUtility_Synchronize(PolyTreeSyncUtility& rDummy, ModelPart& r_model_part, PolyTree2D& r_tree)
+{
+    std::cout << "Synchronize polytree to ModelPart " << r_model_part.Name() << std::endl;
+    ModelPart::NodesContainerType pNewNodes;
+    ModelPart::ElementsContainerType pNewElements;
+    rDummy.Synchronize(r_model_part, r_tree, pNewNodes, pNewElements);
+    std::cout << "Synchronize polytree to ModelPart " << r_model_part.Name() << " completed" << std::endl;
+    boost::python::list python_list;
+    python_list.append(pNewNodes);
+    python_list.append(pNewElements);
+    return python_list;
+}
+
 //////////////////////////////////////
 
 template<std::size_t TDim>
@@ -128,12 +141,30 @@ std::size_t PolyFace_HashCode(PolyFace<TDim>& dummy)
 
 //////////////////////////////////////////////////
 
-void PolyTree2D_WriteMatlabToFile(PolyTree2D& dummy, std::string filename,
+void PolyTree2D_WriteMatlabToFile1(PolyTree2D& dummy, std::string filename,
         bool write_vertex_number, bool write_face_number)
 {
     std::ofstream outfile;
     outfile.open(filename.c_str());
-    dummy.WriteMatlab(outfile, write_vertex_number, write_face_number);
+    dummy.WriteMatlab(outfile, write_vertex_number, write_face_number, true);
+    outfile.close();
+}
+
+void PolyTree2D_WriteMatlabToFile2(PolyTree2D& dummy, std::string filename,
+        bool write_vertex_number, bool write_face_number, bool include_lone_node)
+{
+    std::ofstream outfile;
+    outfile.open(filename.c_str());
+    dummy.WriteMatlab(outfile, write_vertex_number, write_face_number, include_lone_node);
+    outfile.close();
+}
+
+void PolyTree2D_WriteMdpaToFile(PolyTree2D& dummy, std::string filename,
+        std::string ele_prefix, std::size_t prop_id)
+{
+    std::ofstream outfile;
+    outfile.open(filename.c_str());
+    dummy.WriteMdpa(outfile, ele_prefix, prop_id);
     outfile.close();
 }
 
@@ -276,16 +307,18 @@ void PolyFEMApplication_AddCustomUtilitiesToPython()
     .add_property("Vertices", PolyTree2D_GetVertices, PolyTree2D_SetVertices)
     .add_property("Edges", PolyTree2D_GetEdges, PolyTree2D_SetEdges)
     .add_property("Faces", PolyTree2D_GetFaces, PolyTree2D_SetFaces)
-    .def("VerticesArray", &PolyTree2D::Vertices, return_internal_reference<>())
-    .def("EdgesArray", &PolyTree2D::Edges, return_internal_reference<>())
-    .def("FacesArray", &PolyTree2D::Faces, return_internal_reference<>())
+    // .def("VerticesArray", &PolyTree2D::Vertices, return_internal_reference<>())
+    // .def("EdgesArray", &PolyTree2D::Edges, return_internal_reference<>())
+    // .def("FacesArray", &PolyTree2D::Faces, return_internal_reference<>())
     .def("CreateFace", &PolyTree2D::CreateFace)
     .def("MarkFaceRefine", &PolyTree2D::MarkFaceRefine)
     .def("MarkFaceCoarsen", &PolyTree2D::MarkFaceCoarsen)
     .def("BeginRefineCoarsen", &PolyTree2D::BeginRefineCoarsen)
     .def("EndRefineCoarsen", &PolyTree2D::EndRefineCoarsen)
     .def("Validate", &PolyTree2D::Validate)
-    .def("WriteMatlab", &PolyTree2D_WriteMatlabToFile)
+    .def("WriteMatlab", &PolyTree2D_WriteMatlabToFile1)
+    .def("WriteMatlab", &PolyTree2D_WriteMatlabToFile2)
+    .def("WriteMdpa", &PolyTree2D_WriteMdpaToFile)
     .def("ListVertex", &PolyTree2D_ListVertex)
     .def("ListFace", &PolyTree2D_ListFace)
     .def("ListVertices", &PolyTree2D_ListVertices)
@@ -316,6 +349,12 @@ void PolyFEMApplication_AddCustomUtilitiesToPython()
     class_<PolyTreeSyncUtility, PolyTreeSyncUtility::Pointer, boost::noncopyable>
     ("PolyTreeSyncUtility", init<>())
     .def("InitializeHalfEdges", &PolyTreeSyncUtility_InitializeHalfEdges)
+    .def("SetDeformed", &PolyTreeSyncUtility::SetDeformed<PolyTree2D>)
+    .def("Synchronize", &PolyTreeSyncUtility_Synchronize)
+    .def("QueryState", &PolyTreeSyncUtility::QueryState<PolyTree2D>)
+    .def("ListModelPart", &PolyTreeSyncUtility::ListModelPart)
+    .def("CompareForward", &PolyTreeSyncUtility::CompareForward<PolyTree2D>)
+    .def("CompareBackward", &PolyTreeSyncUtility::CompareBackward<PolyTree2D>)
     .def(self_ns::str(self))
     ;
 

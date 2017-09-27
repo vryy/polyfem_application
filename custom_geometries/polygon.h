@@ -237,6 +237,7 @@ public:
 
     GeometryData::KratosGeometryType GetGeometryType()
     {
+        // REMARKS: naming convention for polygon: https://www.mathsisfun.com/geometry/polygons.html
         if(TnVertices == 3)
             return GeometryData::Kratos_Tritagon;
         else if(TnVertices == 4)
@@ -253,6 +254,24 @@ public:
             return GeometryData::Kratos_Nonagon;
         else if(TnVertices == 10)
             return GeometryData::Kratos_Decagon;
+        else if(TnVertices == 11)
+            return GeometryData::Kratos_Hendecagon;
+        else if(TnVertices == 12)
+            return GeometryData::Kratos_Dodecagon;
+        else if(TnVertices == 13)
+            return GeometryData::Kratos_Triskaidecagon;
+        else if(TnVertices == 14)
+            return GeometryData::Kratos_Tetrakaidecagon;
+        else if(TnVertices == 15)
+            return GeometryData::Kratos_Pentadecagon;
+        else if(TnVertices == 16)
+            return GeometryData::Kratos_Hexakaidecagon;
+        else if(TnVertices == 17)
+            return GeometryData::Kratos_Heptadecagon;
+        else if(TnVertices == 18)
+            return GeometryData::Kratos_Octakaidecagon;
+        else if(TnVertices == 19)
+            return GeometryData::Kratos_Enneadecagon;
     }
 
     ///@}
@@ -300,7 +319,46 @@ public:
 
     typename BaseType::Pointer Create( PointsArrayType const& ThisPoints ) const
     {
-        return typename BaseType::Pointer( new Polygon( ThisPoints ) );
+        switch ( ThisPoints.size() )
+        {
+            case 3:
+                return typename BaseType::Pointer( new Polygon<TPointType, 3>( ThisPoints ) );
+            case 4:
+                return typename BaseType::Pointer( new Polygon<TPointType, 4>( ThisPoints ) );
+            case 5:
+                return typename BaseType::Pointer( new Polygon<TPointType, 5>( ThisPoints ) );
+            case 6:
+                return typename BaseType::Pointer( new Polygon<TPointType, 6>( ThisPoints ) );
+            case 7:
+                return typename BaseType::Pointer( new Polygon<TPointType, 7>( ThisPoints ) );
+            case 8:
+                return typename BaseType::Pointer( new Polygon<TPointType, 8>( ThisPoints ) );
+            case 9:
+                return typename BaseType::Pointer( new Polygon<TPointType, 9>( ThisPoints ) );
+            case 10:
+                return typename BaseType::Pointer( new Polygon<TPointType, 10>( ThisPoints ) );
+            case 11:
+                return typename BaseType::Pointer( new Polygon<TPointType, 11>( ThisPoints ) );
+            case 12:
+                return typename BaseType::Pointer( new Polygon<TPointType, 12>( ThisPoints ) );
+            case 13:
+                return typename BaseType::Pointer( new Polygon<TPointType, 13>( ThisPoints ) );
+            case 14:
+                return typename BaseType::Pointer( new Polygon<TPointType, 14>( ThisPoints ) );
+            case 15:
+                return typename BaseType::Pointer( new Polygon<TPointType, 15>( ThisPoints ) );
+            case 16:
+                return typename BaseType::Pointer( new Polygon<TPointType, 16>( ThisPoints ) );
+            case 17:
+                return typename BaseType::Pointer( new Polygon<TPointType, 17>( ThisPoints ) );
+            case 18:
+                return typename BaseType::Pointer( new Polygon<TPointType, 18>( ThisPoints ) );
+            case 19:
+                return typename BaseType::Pointer( new Polygon<TPointType, 19>( ThisPoints ) );
+            default:
+                KRATOS_THROW_ERROR(std::logic_error, ThisPoints.size(), "-gon geometry can't be created")
+//                return typename BaseType::Pointer( new Polygon( ThisPoints ) );
+        }
     }
 
     virtual Geometry< Point<3> >::Pointer Clone() const

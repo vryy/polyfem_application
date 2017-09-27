@@ -32,7 +32,10 @@ void PolyTree2D::Clear()
 {
     // clear all the containers
     mpVertexList->clear();
+    mpEdgeList->clear();
     mpFaceList->clear();
+    mNewEdgeList.clear();
+    mCompositeEdgeList.clear();
 
     m_half_edge_state = UNINITIALIZED;
 }
@@ -141,6 +144,7 @@ void PolyTree2D::BeginRefineCoarsen()
 
                 // set this face as inactive
                 pFace->SetActive(false);
+                pFace->SetState(FaceType::SLEEP);
             }
 
             if (pFace->IsCoarsen())
@@ -195,6 +199,7 @@ void PolyTree2D::BeginRefineCoarsen()
                     mpVertexList->Sort();
 
                     std::vector<std::size_t> removed_face_keys;
+                    removed_face_keys.reserve(pInnerFaces.size());
                     for (FaceContainerType::const_iterator it = pInnerFaces.begin(); it != pInnerFaces.end(); ++it)
                         removed_face_keys.push_back(it->Id());
                     for (std::size_t i = 0; i < removed_face_keys.size(); ++i)
@@ -220,6 +225,7 @@ void PolyTree2D::BeginRefineCoarsen()
                     // create a new face from the round edges, also re-set the next edge for the outer edges
                     pFace->pSetEdge(*(pOuterEdges.ptr_begin()));
                     pFace->SetActive(true);
+                    pFace->SetState(FaceType::RESURRECTED);
                     for (EdgeContainerType::ptr_iterator it = pOuterEdges.ptr_begin(); it != pOuterEdges.ptr_end(); ++it)
                     {
                         EdgeContainerType::ptr_iterator it2 = it+1;
@@ -242,6 +248,9 @@ void PolyTree2D::BeginRefineCoarsen()
                         pEdge->pNode1()->pSetEdge(pEdge);
                         pEdge = pEdge->pNextEdge();
                     } while (pEdge != pFirstEdge);
+
+                    // set historical inner faces
+                    pFace->SetHistoricalInnerFaces(removed_face_keys);
 
                     #ifdef DEBUG_COARSEN
                     std::cout << *pFace << " vertices:" << std::endl;
@@ -571,10 +580,37 @@ void PolyTree2D::EndRefineCoarsen()
                 ss << "Can't find edge with key (" << key.first << " " << key.second << ")";
                 KRATOS_THROW_ERROR(std::logic_error, ss.str(), "")
             }
+
+            // loop around each new vertex and say that the face is changed
+            EdgeType::Pointer pThisEdge = pEdge;
+            do
+            {
+                if (pThisEdge->pFace()->State() != FaceType::NEW_BORN)
+                    pThisEdge->pFace()->SetState(FaceType::CHANGED);
+
+                if (pThisEdge->pPrevEdge()->pOppositeEdge() == NULL)
+                    break;
+                else
+                    pThisEdge = pThisEdge->pPrevEdge()->pOppositeEdge();
+            } while (pThisEdge != pEdge);
+
+            if (pEdge->pOppositeEdge() == NULL)
+                continue;
+
+            pThisEdge = pEdge->pOppositeEdge();
+            do
+            {
+                if (pThisEdge->pFace()->State() != FaceType::NEW_BORN)
+                    pThisEdge->pFace()->SetState(FaceType::CHANGED);
+
+                if (pThisEdge->pNextEdge()->pOppositeEdge() == NULL)
+                    break;
+                else
+                    pThisEdge = pThisEdge->pNextEdge()->pOppositeEdge();
+            } while (pThisEdge != pEdge->pOppositeEdge());
         }
 
         // remove the composite edges
-        // TODO shall we search and remove all composite edges in mCompositeEdgeList to save memory?
         #ifdef DEBUG_REFINE
         std::cout << "  mCompositeEdgeList is going to be cleared" << std::endl;
         #endif // DEBUG_REFINE
@@ -1306,6 +1342,10 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
                 }
             }
 
+            // change the state of the opposite face
+            if (pOppositeEdge->pFace()->State() != FaceType::NEW_BORN)
+                pOppositeEdge->pFace()->SetState(FaceType::CHANGED);
+
             #ifdef DEBUG_REFINE
             for (std::size_t i = 0; i < pReverseEdges.size(); ++i)
             {
@@ -1362,6 +1402,10 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
                 }
             }
 
+            // change the state of the face
+            if (pEdge->pFace()->State() != FaceType::NEW_BORN)
+                pEdge->pFace()->SetState(FaceType::CHANGED);
+
             #ifdef DEBUG_REFINE
             for (std::size_t i = 0; i < pForwardEdges.size(); ++i)
             {
@@ -1407,7 +1451,7 @@ void PolyTree2D::RefineFace(PolyTree2D::FaceType::Pointer pFace,
         std::size_t& LastVertexId, std::size_t& LastFaceId) const
 {
     std::cout << __FUNCTION__ << " " << pFace->Id() << " starts" << std::endl;
-    std::cout << "Face " << *pFace << " will be refined" << std::endl;
+    std::cout << *pFace << " will be refined" << std::endl;
 
     // create the polygon data
     std::vector<std::vector<double> > polygon; // coordinates of the polygon used for Voronoi tessellation
@@ -2177,7 +2221,7 @@ void PolyTree2D::ListFaces(std::ostream& rOStream) const
 }
 
 void PolyTree2D::WriteMatlab(std::ostream& rOStream,
-        const bool& write_vertex_number, const bool& write_face_number) const
+        const bool& write_vertex_number, const bool& write_face_number, const bool& include_lone_node) const
 {
     std::size_t max_number_of_nodes = 0;
     for (FaceContainerType::const_iterator it = mpFaceList->begin(); it != mpFaceList->end(); ++it)
@@ -2193,6 +2237,7 @@ void PolyTree2D::WriteMatlab(std::ostream& rOStream,
     std::size_t row = 0;
     for (VertexContainerType::const_iterator it = mpVertexList->begin(); it != mpVertexList->end(); ++it)
     {
+        if (!include_lone_node && it->IsLonely()) continue;
         rOStream << (*it)[0] << " " << (*it)[1] << ";" << std::endl;
         map_vertex[it->Id()] = ++row;
         if (write_vertex_number) vertex_ids.push_back(it->Id());
@@ -2260,6 +2305,58 @@ void PolyTree2D::WriteMatlab(std::ostream& rOStream,
         rOStream << "    y = y/n;\n";
         rOStream << "    text(x,y,num2str(face_ids(i)),'color','r')\n";
         rOStream << "end\n";
+    }
+}
+
+void PolyTree2D::WriteMdpa(std::ostream& rOStream,
+        const std::string& ele_prefix, const std::size_t& prop_id) const
+{
+    rOStream << "//mdpa for KRATOS structural application using polygon elements" << std::endl;
+    rOStream << "//(c) 2017 Hoang Giang Bui, Ruhr-University Bochum" << std::endl << std::endl;
+
+    rOStream << "Begin ModelPartData" << std::endl;
+    rOStream << "End ModelPartData" << std::endl << std::endl;
+
+    rOStream << "Begin Properties " << prop_id << std::endl;
+    rOStream << "End Properties" << std::endl << std::endl;
+
+    rOStream << "Begin Nodes" << std::endl;
+    for (VertexContainerType::const_iterator it = mpVertexList->begin(); it != mpVertexList->end(); ++it)
+    {
+        rOStream << it->Id() << "\t" << (*it)[0] << "\t" << (*it)[1] << "\t0.0" << std::endl;
+    }
+    rOStream << "End Nodes" << std::endl << std::endl;
+
+    typedef std::map<std::size_t, std::vector<FaceContainerType::const_iterator> > ElementBinType;
+    ElementBinType ElementBin;
+    for (FaceContainerType::const_iterator it = mpFaceList->begin(); it != mpFaceList->end(); ++it)
+    {
+        if (it->IsActive())
+        {
+            ElementBin[it->NumberOfNodes()].push_back(it);
+        }
+    }
+
+    for (ElementBinType::iterator it = ElementBin.begin(); it != ElementBin.end(); ++it)
+    {
+        rOStream << "Begin Elements " << ele_prefix << "Polygon" << it->first << "N" << std::endl;
+        for (std::size_t i = 0; i < it->second.size(); ++i)
+        {
+            FaceContainerType::const_iterator it2 = it->second[i];
+            rOStream << "\t" << it2->Id() << "\t" << prop_id;
+
+            typename EdgeType::Pointer pFirstEdge = it2->pEdge();
+            typename EdgeType::Pointer pEdge = pFirstEdge;
+
+            do
+            {
+                rOStream << "\t" << pEdge->pNode1()->Id();
+                pEdge = pEdge->pNextEdge();
+            } while (pEdge != pFirstEdge);
+
+            rOStream << std::endl;
+        }
+        rOStream << "End Elements" << std::endl << std::endl;
     }
 }
 
