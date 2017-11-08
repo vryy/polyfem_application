@@ -495,12 +495,12 @@ public:
      */
     virtual bool IsInside( const CoordinatesArrayType& rPoint, CoordinatesArrayType& rResult )
     {
-        // TODO check
         this->PointLocalCoordinates( rResult, rPoint );
 
-//        if ( rResult[0] >= -1.0 && rResult[0] <= 1.0 )
-//            if ( rResult[1] >= -1.0 && rResult[1] <= 1.0 )
-//                return true;
+        // this is a rough check. Instead of that we must check if the point lying inside the regular polygon
+        // TODO improve this criteria
+        if ( sqrt( pow(rResult[0], 2) + pow(rResult[1], 2) ) < 1.0 )
+            return true;
 
         return false;
     }
@@ -646,7 +646,8 @@ public:
     static Matrix& ShapeFunctionsLocalGradientsImpl( Matrix& rResult,
             const CoordinatesArrayType& rPoint )
     {
-        rResult.resize( TnVertices, 2, false );
+        if(rResult.size1() != TnVertices || rResult.size2() != 2)
+            rResult.resize( TnVertices, 2, false );
         //noalias( rResult ) = ZeroMatrix( TnVertices, 2 );
 
         Vector A(TnVertices+1);
@@ -703,12 +704,11 @@ public:
             sum_dalpha(1) += dalpha(i, 1);
         }
 
-        double Ni;
         for(unsigned int i = 0; i < TnVertices; ++i)
         {
-            Ni = alpha(i) / sum_alpha;
-            rResult(i, 0) = (dalpha(i, 0) - Ni*sum_dalpha(0))/sum_alpha;
-            rResult(i, 1) = (dalpha(i, 1) - Ni*sum_dalpha(1))/sum_alpha;
+            double Ni = alpha(i) / sum_alpha;
+            rResult(i, 0) = -(dalpha(i, 0) - Ni*sum_dalpha(0))/sum_alpha;
+            rResult(i, 1) = -(dalpha(i, 1) - Ni*sum_dalpha(1))/sum_alpha;
         }
 
         return rResult;
@@ -782,6 +782,93 @@ public:
         KRATOS_THROW_ERROR(std::logic_error, __FUNCTION__, " is yet implemented");
 
         return rResult;
+    }
+
+    virtual Matrix& Jacobian( Matrix& rResult, const CoordinatesArrayType& rCoordinates ) const
+    {
+        if(rResult.size1() != this->WorkingSpaceDimension() || rResult.size2() != this->LocalSpaceDimension())
+            rResult.resize( this->WorkingSpaceDimension(), this->LocalSpaceDimension(), false );
+
+        Matrix shape_functions_gradients(this->PointsNumber(), this->LocalSpaceDimension());
+        ShapeFunctionsLocalGradients( shape_functions_gradients, rCoordinates );
+
+        rResult.clear();
+        for ( unsigned int i = 0; i < this->PointsNumber(); i++ )
+        {
+            for(unsigned int k=0; k<this->WorkingSpaceDimension(); k++)
+            {
+                for(unsigned int m=0; m<this->LocalSpaceDimension(); m++)
+                {
+                    rResult(k,m) += (( *this )[i]).Coordinates()[k]*shape_functions_gradients(i,m);
+                }
+            }
+        }
+
+        return rResult;
+    }
+
+    virtual CoordinatesArrayType& PointLocalCoordinates( CoordinatesArrayType& rResult,
+            const CoordinatesArrayType& rPoint )
+    {
+        Matrix J = ZeroMatrix( this->LocalSpaceDimension(), this->LocalSpaceDimension() );
+
+        if ( rResult.size() != this->LocalSpaceDimension() )
+            rResult.resize( this->LocalSpaceDimension(), false );
+
+        //starting with xi = 0
+        rResult = ZeroVector( this->LocalSpaceDimension() );
+
+        Vector DeltaXi = ZeroVector( this->LocalSpaceDimension() );
+
+        CoordinatesArrayType CurrentGlobalCoords( ZeroVector( 3 ) );
+
+        //Newton iteration:
+        const double tol = 1.0e-8;
+        const double diverged_tol = 30.0;
+
+        int k, maxiter = 1000;
+        bool converged = false;
+
+        for ( k = 0; k < maxiter; k++ )
+        {
+            CurrentGlobalCoords = ZeroVector( 3 );
+            this->GlobalCoordinates( CurrentGlobalCoords, rResult );
+//            KRATOS_WATCH(CurrentGlobalCoords)
+            noalias( CurrentGlobalCoords ) = rPoint - CurrentGlobalCoords;
+//            std::cout << " residual: " << CurrentGlobalCoords << std::endl;
+
+            if ( MathUtils<double>::Norm3( CurrentGlobalCoords ) < tol )
+            {
+                converged = true;
+                break;
+            }
+
+            this->InverseOfJacobian( J, rResult );
+            noalias( DeltaXi ) = prod( J, CurrentGlobalCoords );
+            noalias( rResult ) += DeltaXi;
+//            std::cout << " InvJ: " << J << std::endl;
+//            std::cout << " DeltaXi: " << DeltaXi << std::endl;
+//            std::cout << " rResult: " << rResult << std::endl;
+
+            if ( MathUtils<double>::Norm3( DeltaXi ) > diverged_tol )
+            {
+                converged = false;
+                break;
+            }
+        }
+
+        if (!converged)
+        {
+            KRATOS_WATCH(rPoint)
+            for (unsigned int i = 0; i < this->size(); ++i)
+                std::cout << " " << (*this)[i].X() << " " << (*this)[i].Y() << std::endl;
+            KRATOS_WATCH(J)
+            KRATOS_WATCH(CurrentGlobalCoords)
+            KRATOS_WATCH(rResult)
+            KRATOS_THROW_ERROR(std::logic_error, __FUNCTION__, " does not converge")
+        }
+
+        return( rResult );
     }
 
     ///@}

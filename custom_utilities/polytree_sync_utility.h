@@ -62,19 +62,30 @@ public:
     ///@name Type Definitions
     ///@{
 
+    enum SynchronizeStates
+    {
+        UNSYNCHRONIZED = 0,
+        SYNCHRONIZED = 1
+    };
+
     /// Pointer definition of PolyTreeSyncUtility
     KRATOS_CLASS_POINTER_DEFINITION(PolyTreeSyncUtility);
+
+    typedef Element::GeometryType GeometryType;
+    typedef GeometryType::CoordinatesArrayType CoordinatesArrayType;
 
     ///@}
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    PolyTreeSyncUtility() {}
+    PolyTreeSyncUtility()
+    : m_synchronize_state(UNSYNCHRONIZED)
+    {}
 
     /// Destructor.
-    virtual ~PolyTreeSyncUtility() {}
-
+    virtual ~PolyTreeSyncUtility()
+    {}
 
     ///@}
     ///@name Operators
@@ -98,7 +109,7 @@ public:
             TVertexContainerType& rVertexList,
             TEdgeContainerType& rEdgeList,
             TFaceContainerType& rFaceList,
-            std::size_t& LastVertexId, std::size_t& LastFaceId) const
+            std::size_t& LastVertexId, std::size_t& LastFaceId)
     {
         typedef ModelPart::ElementType::GeometryType GeometryType;
         typedef typename TVertexContainerType::data_type VertexType;
@@ -220,6 +231,9 @@ public:
                 KRATOS_THROW_ERROR(std::logic_error, "Something wrong with the half edges", "")
             }
         }
+
+        // after the first initialization, the state is assumed to be SYNCHRONIZED
+        m_synchronize_state = SYNCHRONIZED;
     }
 
 
@@ -257,13 +271,20 @@ public:
 
 
     /**
-     * Synchronize the nodes & elements in the model_part and the vertices and faces of the polytree after coarsen/refinement
+     * Begin synchronization the nodes & elements in the model_part and the vertices and faces of the polytree after coarsen/refinement
+     * In the beginning phase, the new nodes and elements are created, but the old ones won't be deleted. They must exist to transfer the physical data.
      */
     template<class TTreeType>
-    void Synchronize(ModelPart& r_model_part, const TTreeType& r_tree,
-            ModelPart::NodesContainerType& rpNewNodes,
-            ModelPart::ElementsContainerType& rpNewElements) const
+    void BeginSynchronize(ModelPart& r_model_part, const TTreeType& r_tree)
     {
+        std::cout << "<<<<<<<<<<<<<<<<" << __FUNCTION__ << " begin" << ">>>>>>>>>>>>>>>>" << std::endl;
+
+        if (m_synchronize_state == UNSYNCHRONIZED)
+            return;
+
+        if (m_synchronize_state == SYNCHRONIZED)
+            m_synchronize_state = UNSYNCHRONIZED;
+
         typedef typename TTreeType::VertexContainerType VertexContainerType;
         typedef typename TTreeType::EdgeContainerType EdgeContainerType;
         typedef typename TTreeType::FaceContainerType FaceContainerType;
@@ -300,6 +321,8 @@ public:
 
         // for all the new vertices, find out the parent face
         std::map<std::size_t, std::size_t> MapVertexParentFace;
+        std::vector<std::size_t> ListNewNodes;
+        std::vector<std::size_t> ListMovedNodes;
         for (typename VertexContainerType::const_iterator it = pNewVertices.begin(); it != pNewVertices.end(); ++it)
         {
             // check if the node existed in the model_part
@@ -310,10 +333,12 @@ public:
                 if (pFace->State() == FaceType::NEW_BORN)
                 {
                     MapVertexParentFace[it->Id()] = pFace->pParent()->Id();
+                    ListNewNodes.push_back(it->Id());
                 }
                 else if (pFace->State() == FaceType::CHANGED)
                 {
                     MapVertexParentFace[it->Id()] = pFace->Id();
+                    ListMovedNodes.push_back(it->Id());
                 }
             }
         }
@@ -327,19 +352,53 @@ public:
         std::cout << std::endl;
         #endif
 
-        // create new nodes and add to model_part
-        for (std::map<std::size_t, std::size_t>::iterator it = MapVertexParentFace.begin(); it != MapVertexParentFace.end(); ++it)
+        // in case of new node: create new nodes and add to model_part
+        for (std::vector<std::size_t>::iterator it = ListNewNodes.begin(); it != ListNewNodes.end(); ++it)
         {
             // create and insert new node
-            typename VertexType::Pointer pVertex = pNewVertices(it->first);
+            typename VertexType::Pointer pVertex = pNewVertices(*it);
             ModelPart::NodeType::Pointer pNewNode = r_model_part.CreateNewNode(pVertex->Id(), (*pVertex)[0], (*pVertex)[1], 0.0);
             #ifdef DEBUG_SYNCHRONIZE
             std::cout << *pNewNode << " is created" << std::endl;
             #endif
-            rpNewNodes.insert(rpNewNodes.begin(), pNewNode);
+            mpNewNodes.insert(mpNewNodes.begin(), pNewNode);
 
-            // transfer data to new node
-            // TODO
+            /* transfer data from parent element to new node */
+            // find the parent element
+            ModelPart::ElementsContainerType::const_iterator it_elem = r_model_part.Elements().find(MapVertexParentFace[*it]);
+            if (it_elem == r_model_part.Elements().end())
+            {
+                KRATOS_THROW_ERROR(std::logic_error, "The parent element does not exist for node", pNewNode->Id())
+            }
+
+            mNewNodeParentElement[pNewNode->Id()] = it_elem->Id();
+        }
+
+        for (std::vector<std::size_t>::iterator it = ListMovedNodes.begin(); it != ListMovedNodes.end(); ++it)
+        {
+            // firstly check if the node is new after merging or the existing one
+            ModelPart::NodesContainerType::iterator it_node = r_model_part.Nodes().find(*it);
+
+            if (it_node == r_model_part.Nodes().end())
+            {
+                // this node existed in model_part, no transfer is required
+            }
+            else
+            {
+                // this node is created after merging operation
+                typename TTreeType::ComposingVerticesContainerType::const_iterator it_composing_vertices
+                        = r_tree.ComposingVertices().find(*it);
+                if (it_composing_vertices != r_tree.ComposingVertices().end())
+                {
+                    const std::vector<std::size_t>& composing_vertices = it_composing_vertices->second;
+
+                    mComposingVerticesData[it_composing_vertices->first] = composing_vertices;
+                }
+                else
+                {
+                    KRATOS_THROW_ERROR(std::logic_error, "The vertex is not contained in ComposingVertices information. Something's wrong", "")
+                }
+            }
         }
 
         // create new element and add to model_part
@@ -362,7 +421,6 @@ public:
                 // extract the parent element name and properties
                 Properties::Pointer pProperties = it_elem->pGetProperties();
                 Element::Pointer pNewElement = pCreateElementFrom(*it, *it_elem, r_model_part.Nodes(), pProperties);
-                r_model_part.Elements().push_back(pNewElement);
                 #ifdef DEBUG_SYNCHRONIZE
                 std::cout << "Element " << pNewElement->Id()
                           << " of type " << typeid(*pNewElement).name()
@@ -374,12 +432,11 @@ public:
                     std::cout << " " << pNewElement->GetGeometry()[i].Id();
                 std::cout << ", is created" << std::endl;
                 #endif
-                rpNewElements.push_back(pNewElement);
+                mpNewElements.push_back(pNewElement);
+                mNewElementParentElement[pNewElement->Id()] = parent_element_id;
 
                 // set the state of the face to normal
                 it->SetState(FaceType::NORMAL);
-
-                // TODO transfer the data from old element to new element
             }
             else if (it->State() == FaceType::CHANGED)
                 // a changed element is the element that has nodes changed. It is the result of the refinement where nodes are moved or collapsed.
@@ -398,9 +455,6 @@ public:
                 Properties::Pointer pProperties = it_elem->pGetProperties();
                 Element::Pointer pNewElement = pCreateElementFrom(*it, *it_elem, r_model_part.Nodes(), pProperties);
 
-                Element::Pointer pOldElement = r_model_part.Elements()(it_elem->Id());
-                r_model_part.RemoveElement(pOldElement);
-                r_model_part.Elements().push_back(pNewElement);
                 #ifdef DEBUG_SYNCHRONIZE
                 std::cout << "Element " << pNewElement->Id()
                           << " of type " << typeid(*pNewElement).name()
@@ -412,12 +466,10 @@ public:
                     std::cout << " " << pNewElement->GetGeometry()[i].Id();
                 std::cout << ", is created" << std::endl;
                 #endif
-                rpNewElements.push_back(pNewElement);
+                mpChangedElements.push_back(pNewElement);
 
                 // set the state of the face to normal
                 it->SetState(FaceType::NORMAL);
-
-                // TODO transfer the data from old element to new element
             }
             else if (it->State() == FaceType::RESURRECTED)
                 // a resurrected element is the element that is created after coarsen. It is refined and put to inactive state before. Now it is activated again, and its children elements will be deleted.
@@ -445,7 +497,6 @@ public:
                 // extract one child element name and properties
                 Properties::Pointer pProperties = p_children.begin()->pGetProperties();
                 Element::Pointer pNewElement = pCreateElementFrom(*it, *p_children.begin(), r_model_part.Nodes(), pProperties);
-                r_model_part.Elements().push_back(pNewElement);
                 #ifdef DEBUG_SYNCHRONIZE
                 std::cout << "Element " << pNewElement->Id()
                           << " of type " << typeid(*pNewElement).name()
@@ -457,26 +508,52 @@ public:
                     std::cout << " " << pNewElement->GetGeometry()[i].Id();
                 std::cout << ", is created" << std::endl;
                 #endif
-                rpNewElements.push_back(pNewElement);
-
-
-                // TODO transfer back data from children to parent
-                
-                // remove the children elements from model_part
-                for (std::size_t i = 0; i < it->HistoricalInnerFaces().size(); ++i)
-                    r_model_part.RemoveElement(it->HistoricalInnerFaces()[i]);
+                mpResurrectedElements.push_back(pNewElement);
+                mResurrectedElementData[pNewElement->Id()] = it->HistoricalInnerFaces();
 
                 // set the state of the face to normal
                 it->SetState(FaceType::NORMAL);
 
                 // clear the historical inner faces after used
                 it->ClearHistoricalInnerFaces();
-
-                
             }
         }
 
-        r_model_part.Elements().Unique(); // sort the element container
+        std::cout << "<<<<<<<<<<<<<<<<" << __FUNCTION__ << " end" << ">>>>>>>>>>>>>>>>" << std::endl;
+
+        return;
+    }
+
+    /**
+     * Transfer the nodal variable. It's important that the node must be in its original position (i.e MoveMeshFlag = False), so that the local coordinates is found correctly.
+     */
+    template<class TVariableType>
+    void TransferNodalVariable(ModelPart& r_model_part, TVariableType& rThisVariable)
+    {
+        this->TransferNodalVariableImpl(r_model_part, rThisVariable);
+    }
+
+    /**
+     * End the synchronization, the old nodes and elements will be erased, as well as the internal data of this class.
+     */
+    template<class TTreeType>
+    void EndSynchronize(ModelPart& r_model_part, const TTreeType& r_tree)
+    {
+        std::cout << "<<<<<<<<<<<<<<<<" << __FUNCTION__ << " begin" << ">>>>>>>>>>>>>>>>" << std::endl;
+
+        if (m_synchronize_state != UNSYNCHRONIZED)
+        {
+            std::cout << "<<<<<<<<<<<<<<<<Calling " << __FUNCTION__ << " is not valid" << ">>>>>>>>>>>>>>>>" << std::endl;
+            return;
+        }
+
+        typedef typename TTreeType::VertexContainerType VertexContainerType;
+        typedef typename TTreeType::EdgeContainerType EdgeContainerType;
+        typedef typename TTreeType::FaceContainerType FaceContainerType;
+
+        typedef typename TTreeType::VertexType VertexType;
+        typedef typename TTreeType::EdgeType EdgeType;
+        typedef typename TTreeType::FaceType FaceType;
 
         // remove the lone nodes
         std::vector<std::size_t> list_removed_nodes_lonely;
@@ -512,8 +589,46 @@ public:
             #endif
         }
 
-
         r_model_part.Nodes().Unique(); // sort the node container
+
+        #ifdef DEBUG_SYNCHRONIZE
+        std::cout << "Start to remove elements" << std::endl;
+        KRATOS_WATCH(mpNewElements.size())
+        KRATOS_WATCH(mpChangedElements.size())
+        KRATOS_WATCH(mpResurrectedElements.size())
+        #endif
+
+        // for sub-elements: add new element to model part
+        for (ModelPart::ElementsContainerType::ptr_iterator it = mpNewElements.ptr_begin(); it != mpNewElements.ptr_end(); ++it)
+        {
+            r_model_part.Elements().push_back(*it);
+            std::cout << "Element " << (*it)->Id() << " is added to the model_part" << std::endl;
+        }
+
+        r_model_part.Elements().Unique(); // sort the element container
+
+        // for changed elements: remove the old and replace by new one
+        for (ModelPart::ElementsContainerType::ptr_iterator it = mpChangedElements.ptr_begin(); it != mpChangedElements.ptr_end(); ++it)
+        {
+            r_model_part.RemoveElement((*it)->Id());
+            std::cout << "Removed element " << (*it)->Id() << std::endl;
+            r_model_part.Elements().push_back(*it);
+            std::cout << "Element " << (*it)->Id() << " is added" << std::endl;
+        }
+
+        r_model_part.Elements().Unique(); // sort the element container
+
+        // for resurrected elements: remove the children and add the resurrected one
+        for (ModelPart::ElementsContainerType::ptr_iterator it = mpResurrectedElements.ptr_begin(); it != mpResurrectedElements.ptr_end(); ++it)
+        {
+            // remove the children elements from model_part
+            for (std::size_t i = 0; i < mResurrectedElementData[(*it)->Id()].size(); ++i)
+                r_model_part.RemoveElement(mResurrectedElementData[(*it)->Id()][i]);
+
+            r_model_part.Elements().push_back(*it);
+        }
+
+        r_model_part.Elements().Unique(); // sort the element container
 
         // remove the inactive elements
         for (typename FaceContainerType::const_iterator it = r_tree.Faces().begin(); it != r_tree.Faces().end(); ++it)
@@ -540,12 +655,51 @@ public:
 
         r_model_part.Elements().Unique(); // sort the element container
 
+        m_synchronize_state = SYNCHRONIZED;
+
+        // clean the internal data structure
+        mpNewNodes.clear();
+        std::cout << "New nodes container is cleared" << std::endl;
+        mNewNodeParentElement.clear();
+        mComposingVerticesData.clear();
+
+        mpNewElements.clear();
+        std::cout << "New elements container is cleared" << std::endl;
+        mNewElementParentElement.clear();
+        mpChangedElements.clear();
+        std::cout << "Changed elements container is cleared" << std::endl;
+        mpResurrectedElements.clear();
+        mResurrectedElementData.clear();
+        std::cout << "Resurrected elements container is cleared" << std::endl;
+
+        std::cout << "<<<<<<<<<<<<<<<<" << __FUNCTION__ << " end" << ">>>>>>>>>>>>>>>>" << std::endl;
+
         return;
     }
 
     ///@}
     ///@name Access
     ///@{
+
+    ModelPart::NodesContainerType GetNewNodes()
+    {
+        return mpNewNodes;
+    }
+
+    ModelPart::ElementsContainerType GetNewElements()
+    {
+        return mpNewElements;
+    }
+
+    ModelPart::ElementsContainerType GetChangedElements()
+    {
+        return mpChangedElements;
+    }
+
+    ModelPart::ElementsContainerType GetResurrectedElements()
+    {
+        return mpResurrectedElements;
+    }
 
     /**
      * Probe the status of the polytree
@@ -849,6 +1003,17 @@ private:
     ///@name Member Variables
     ///@{
 
+    SynchronizeStates m_synchronize_state;
+
+    ModelPart::NodesContainerType mpNewNodes;
+    std::map<std::size_t, std::size_t> mNewNodeParentElement;
+    std::map<std::size_t, std::vector<std::size_t> > mComposingVerticesData;
+
+    ModelPart::ElementsContainerType mpNewElements;
+    std::map<std::size_t, std::size_t> mNewElementParentElement;
+    ModelPart::ElementsContainerType mpChangedElements;
+    ModelPart::ElementsContainerType mpResurrectedElements;
+    std::map<std::size_t, std::vector<std::size_t> > mResurrectedElementData;
 
     ///@}
     ///@name Private Operators
@@ -894,6 +1059,136 @@ private:
         return i_result;
     }
 
+    void TransferNodalVariableImpl(ModelPart& r_model_part, Variable<double>& rThisVariable)
+    {
+        // transfer data for new node
+        for (std::map<std::size_t, std::size_t>::iterator it = mNewNodeParentElement.begin();
+                it != mNewNodeParentElement.end(); ++it)
+        {
+            std::size_t node_id = it->first;
+            std::size_t parent_element_id = it->second;
+
+            ModelPart::NodeType::Pointer pNewNode = r_model_part.Nodes()(node_id);
+            Element::Pointer pParentElement = r_model_part.Elements()(parent_element_id);
+
+            // find the local coordinates of the node within the parent element
+            CoordinatesArrayType local_coords;
+            local_coords = pParentElement->GetGeometry().PointLocalCoordinates(local_coords, *pNewNode);
+            #ifdef DEBUG_SYNCHRONIZE
+            std::cout << "local coordinates of new node " << pNewNode->Id() << " within parent element " << pParentElement->Id() << ": " << local_coords << std::endl;
+            std::cout << " node on element " << pParentElement->Id() << ":" << std::endl;
+            for (unsigned int i = 0; i < pParentElement->GetGeometry().size(); ++i)
+            {
+                std::cout << "  " << pParentElement->GetGeometry()[i].Id() << ": " << pParentElement->GetGeometry()[i].X0() << " " << pParentElement->GetGeometry()[i].Y0() << std::endl;
+            }
+            CoordinatesArrayType global_coords;
+            global_coords = pParentElement->GetGeometry().GlobalCoordinates(global_coords, local_coords);
+            std::cout << " recheck the global coordinates: " << global_coords << std::endl;
+            #endif
+
+            // transfer the data to new node
+            double new_value = 0.0;
+            Vector ShapeFunctionValues;
+            ShapeFunctionValues = pParentElement->GetGeometry().ShapeFunctionsValues(ShapeFunctionValues, local_coords);
+            for (std::size_t j = 0; j < pParentElement->GetGeometry().size(); ++j)
+            {
+                new_value += ShapeFunctionValues[j] * pParentElement->GetGeometry()[j].GetSolutionStepValue(rThisVariable);
+            }
+            pNewNode->SetValue(rThisVariable, new_value);
+            #ifdef DEBUG_SYNCHRONIZE
+            std::cout << " Node " << pNewNode->Id() << " has new " << rThisVariable.Name() << " value: " << new_value << std::endl;
+            #endif
+        }
+
+        // transfer data from composing Vertices
+        for (std::map<std::size_t, std::vector<size_t> >::iterator it = mComposingVerticesData.begin();
+                it != mComposingVerticesData.end(); ++it)
+        {
+            std::size_t node_id = it->first;
+            std::vector<std::size_t> composing_vertices = it->second;
+
+            ModelPart::NodeType::Pointer pNewNode = r_model_part.Nodes()(node_id);
+
+            double new_value = 0.0;
+            for (std::size_t j = 0; j < composing_vertices.size(); ++j)
+            {
+                new_value += r_model_part.Nodes()[composing_vertices[j]].GetSolutionStepValue(rThisVariable);
+            }
+            new_value /= composing_vertices.size();
+            pNewNode->SetValue(rThisVariable, new_value);
+            #ifdef DEBUG_SYNCHRONIZE
+            std::cout << " Node " << pNewNode->Id() << " has new " << rThisVariable.Name() << " value: " << new_value << std::endl;
+            #endif
+        }
+    }
+
+    void TransferNodalVariableImpl(ModelPart& r_model_part, Variable<array_1d<double, 3> >& rThisVariable)
+    {
+        // transfer data for new node
+        for (std::map<std::size_t, std::size_t>::iterator it = mNewNodeParentElement.begin();
+                it != mNewNodeParentElement.end(); ++it)
+        {
+            std::size_t node_id = it->first;
+            std::size_t parent_element_id = it->second;
+
+            ModelPart::NodeType::Pointer pNewNode = r_model_part.Nodes()(node_id);
+            Element::Pointer pParentElement = r_model_part.Elements()(parent_element_id);
+
+            // find the local coordinates of the node within the parent element
+            CoordinatesArrayType local_coords;
+            local_coords = pParentElement->GetGeometry().PointLocalCoordinates(local_coords, *pNewNode);
+            #ifdef DEBUG_SYNCHRONIZE
+            std::cout << "local coordinates of new node " << pNewNode->Id() << " within parent element " << pParentElement->Id() << ": " << local_coords << std::endl;
+            std::cout << " node on element " << pParentElement->Id() << ":" << std::endl;
+            for (unsigned int i = 0; i < pParentElement->GetGeometry().size(); ++i)
+            {
+                std::cout << "  " << pParentElement->GetGeometry()[i].Id() << ": " << pParentElement->GetGeometry()[i].X0() << " " << pParentElement->GetGeometry()[i].Y0();
+                std::cout << ", " << rThisVariable.Name() << ": " << pParentElement->GetGeometry()[i].GetSolutionStepValue(rThisVariable);
+                std::cout << std::endl;
+            }
+            CoordinatesArrayType global_coords;
+            global_coords = pParentElement->GetGeometry().GlobalCoordinates(global_coords, local_coords);
+            std::cout << " recheck the global coordinates: " << global_coords << std::endl;
+            #endif
+
+            // transfer the data to new node
+            array_1d<double, 3> new_value;
+            noalias(new_value) = ZeroVector(3);
+            Vector ShapeFunctionValues;
+            ShapeFunctionValues = pParentElement->GetGeometry().ShapeFunctionsValues(ShapeFunctionValues, local_coords);
+            for (std::size_t j = 0; j < pParentElement->GetGeometry().size(); ++j)
+            {
+                new_value += ShapeFunctionValues[j] * pParentElement->GetGeometry()[j].GetSolutionStepValue(rThisVariable);
+            }
+            pNewNode->SetValue(rThisVariable, new_value);
+            #ifdef DEBUG_SYNCHRONIZE
+            std::cout << " Node " << pNewNode->Id() << " has new " << rThisVariable.Name() << " value: " << new_value << std::endl;
+            #endif
+        }
+
+        // transfer data from composing Vertices
+        for (std::map<std::size_t, std::vector<size_t> >::iterator it = mComposingVerticesData.begin();
+                it != mComposingVerticesData.end(); ++it)
+        {
+            std::size_t node_id = it->first;
+            std::vector<std::size_t> composing_vertices = it->second;
+
+            ModelPart::NodeType::Pointer pNewNode = r_model_part.Nodes()(node_id);
+
+            array_1d<double, 3> new_value;
+            noalias(new_value) = ZeroVector(3);
+            for (std::size_t j = 0; j < composing_vertices.size(); ++j)
+            {
+                new_value += r_model_part.Nodes()[composing_vertices[j]].GetSolutionStepValue(rThisVariable);
+            }
+            new_value /= composing_vertices.size();
+            pNewNode->SetValue(rThisVariable, new_value);
+            #ifdef DEBUG_SYNCHRONIZE
+            std::cout << " Node " << pNewNode->Id() << " has new " << rThisVariable.Name() << " value: " << new_value << std::endl;
+            #endif
+        }
+    }
+
     ///@}
     ///@name Private  Access
     ///@{
@@ -905,7 +1200,7 @@ private:
 
 
     ///@}
-    ///@name Un accessible methods
+    ///@name Unaccessible methods
     ///@{
 
     /// Assignment operator.

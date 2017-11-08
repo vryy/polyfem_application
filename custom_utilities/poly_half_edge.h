@@ -45,7 +45,7 @@ template<std::size_t TDim> class PolyFace;
 template<std::size_t TDim>
 struct PolyHash
 {
-    std::size_t operator() (PolyHalfEdge<TDim> const& rThis) const 
+    std::size_t operator() (PolyHalfEdge<TDim> const& rThis) const
     {
         std::size_t h;
         std::size_t h1 = std::hash<std::size_t>{} (rThis.Node1().Id());
@@ -57,21 +57,21 @@ struct PolyHash
             h = h ^ (PolyHash<TDim>{} (rThis.PrevEdge()) << 1);
         if (rThis.pOppositeEdge() != NULL)
             h = h ^ (PolyHash<TDim>{} (rThis.OppositeEdge()) << 1);
-        return h; 
+        return h;
     }
 
-    std::size_t operator()(PolyFace<TDim> const& rThis) const 
+    std::size_t operator()(PolyFace<TDim> const& rThis) const
     {
         std::size_t h;
         std::size_t h1 = std::hash<std::size_t>{}(rThis.Id());
         std::size_t h2 = PolyHash<TDim>{}(rThis.Edge());
         h = h1 ^ (h2 << 1);
-        return h; 
+        return h;
     }
 }; // struct PolyHash
 
 
-/** 
+/**
  * A Polytree vertex in n-dimensional space
  */
 template<std::size_t TDim>
@@ -648,7 +648,7 @@ public:
 
         return number_of_edges;
     }
-    
+
     /**
      * Extract the minimal polygon from this face. This polygon does not contain middle nodes on edge.
      * Note that this function requires the face to be complete, i.e. the half-edges make a closed loop. Do not call this function after BeginRefineCoarsen() and before EndRefineCoarsen().
@@ -850,7 +850,7 @@ private:
     PolyFaceState m_state; // state flag of the face. It is useful to generate element from outside code.
 
     bool m_is_refined; // flag to mark if this face is about to be refined
-    
+
     bool m_is_coarsen; // flag to mark if this face is about to be coarsen
 
     bool m_is_active;  // flag to indicate if this face is active/inactive. For example, if the face is refined, it will become inactive

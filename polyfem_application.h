@@ -1,4 +1,4 @@
-//   
+//
 //   Project Name:        Kratos
 //   Last Modified by:    $Author: hbui $
 //   Date:                $Date: Jan 21, 2016 $
@@ -60,13 +60,13 @@ namespace Kratos
     public:
         ///@name Type Definitions
         ///@{
-        
+
         /// Pointer definition of KratosMultiphaseApplication
         KRATOS_CLASS_POINTER_DEFINITION(KratosPolyFEMApplication);
 
         ///@}
         ///@name Life Cycle
-        ///@{ 
+        ///@{
 
         /// Default constructor.
         KratosPolyFEMApplication();
@@ -162,7 +162,7 @@ namespace Kratos
 
         ///@}
         ///@name Protected Inquiry
-        ///@{ 
+        ///@{
 
 
         ///@}

@@ -48,7 +48,7 @@ namespace Kratos
  * The polytree maintains a list of vertices and list of faces. It is kept to synchronize with the ModelPart.
  *
  * TODO:
- * 
+ *
  */
 class PolyTree2D : public DataValueContainer
 {
@@ -77,6 +77,8 @@ public:
     typedef PointerVectorSet<EdgeType, EdgeGetKeyType, PairIndexedObjectCompare, PairIndexedObjectEqual> EdgeContainerType;
 
     typedef PointerVectorSet<FaceType, IndexedObject> FaceContainerType;
+
+    typedef std::map<std::size_t, std::vector<std::size_t> > ComposingVerticesContainerType;
 
     /// Default constructor.
     PolyTree2D() : mLastVertexId(0), mLastFaceId(0)
@@ -125,6 +127,9 @@ public:
     const FaceContainerType& Faces() const {return *mpFaceList;}
     FaceContainerType::Pointer pFaces() {return mpFaceList;}
     void SetFaces(typename FaceContainerType::Pointer pOtherFaces) {mpFaceList = pOtherFaces;}
+
+    /// Get the composing vertices information
+    const ComposingVerticesContainerType& ComposingVertices() const {return mComposingVertices;}
 
     /**
      * Create a new face with Id // Do not use this in simulation, this is only for debugging
@@ -278,6 +283,8 @@ private:
     EdgeContainerType mCompositeEdgeList; // container to contain newly created composite half-edges for merge operation, will be deleted after EndRefineCoarsen
     FaceContainerType::Pointer mpFaceList;
 
+    ComposingVerticesContainerType mComposingVertices;
+
     HalfEdgeStates m_half_edge_state;
 
     std::size_t mLastVertexId;
@@ -295,6 +302,7 @@ private:
      * @param rFace the input face
      * @param rVertexList the list of all vertices in the tree, new vertices will be added
      * @param rNewVertexList the list of newly created vertices
+     * @param rComposingVertices after merging, there are some new vertices created by averaging some other vertices. This map stores those information.
      * @param rEdgeList the list of all half-edges
      * @param rCompositeEdgeList the list of all composite edges
      * @param LastVertexId the last vertex id
@@ -304,6 +312,7 @@ private:
             EdgeType::Pointer pOppositeEdge,
             VertexContainerType& rVertexList,
             VertexContainerType& rNewVertexList,
+            std::map<std::size_t, std::vector<std::size_t> >& rComposingVertices,
             EdgeContainerType& rEdgeList,
             EdgeContainerType& rCompositeEdgeList,
             std::size_t& LastVertexId,

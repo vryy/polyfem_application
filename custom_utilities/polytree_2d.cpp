@@ -36,7 +36,7 @@ void PolyTree2D::Clear()
     mpFaceList->clear();
     mNewEdgeList.clear();
     mCompositeEdgeList.clear();
-
+    mComposingVertices.clear();
     m_half_edge_state = UNINITIALIZED;
 }
 
@@ -418,7 +418,7 @@ void PolyTree2D::EndRefineCoarsen()
         {
             bool is_composite = EdgePairs[i].second->IsComposite();
 
-            MergeEdges(EdgePairs[i].first, EdgePairs[i].second, *mpVertexList, pNewVertices, pNewEdges, pNewCompositeEdges, mLastVertexId, alpha);
+            MergeEdges(EdgePairs[i].first, EdgePairs[i].second, *mpVertexList, pNewVertices, mComposingVertices, pNewEdges, pNewCompositeEdges, mLastVertexId, alpha);
 
             // if the opposite edge is turned composite, we have to move them to other list
             if (!is_composite && EdgePairs[i].second->IsComposite())
@@ -702,6 +702,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
         PolyTree2D::EdgeType::Pointer pOppositeEdge,
         PolyTree2D::VertexContainerType& rVertexList,
         PolyTree2D::VertexContainerType& rNewVertexList,
+        std::map<std::size_t, std::vector<std::size_t> >& rComposingVertices,
         PolyTree2D::EdgeContainerType& rEdgeList,
         PolyTree2D::EdgeContainerType& rCompositeEdgeList,
         std::size_t& LastVertexId,
@@ -860,6 +861,7 @@ void PolyTree2D::MergeEdges(PolyTree2D::EdgeType::Pointer pEdge,
                     x /= cluster[i].size();
                     y /= cluster[i].size();
                     pVertex = boost::make_shared<VertexType>(++LastVertexId, x, y);
+                    rComposingVertices[pVertex->Id()] = cluster[i];
                     #ifdef DEBUG_REFINE
                     std::cout << "     New " << *pVertex << " is created" << std::endl;
                     #endif // DEBUG_REFINE

@@ -55,6 +55,8 @@ void PolyFEMUtility_AddElement(PolyFEMUtility& rDummy, ModelPart::ElementsContai
     rDummy.AddElement(rpElements, pElement);
 }
 
+//////////////////////////////////////
+
 void PolyTreeSyncUtility_InitializeHalfEdges(PolyTreeSyncUtility& rDummy, ModelPart& r_model_part, PolyTree2D& r_tree)
 {
     std::cout << "Constructing half-edge data structure from ModelPart " << r_model_part.Name() << std::endl;
@@ -64,19 +66,6 @@ void PolyTreeSyncUtility_InitializeHalfEdges(PolyTreeSyncUtility& rDummy, ModelP
     std::cout << "Number of vertices: " << r_tree.Vertices().size() << std::endl;
     std::cout << "Number of half-edges: " << r_tree.Edges().size() << std::endl;
     std::cout << "Number of faces: " << r_tree.Faces().size() << std::endl;
-}
-
-boost::python::list PolyTreeSyncUtility_Synchronize(PolyTreeSyncUtility& rDummy, ModelPart& r_model_part, PolyTree2D& r_tree)
-{
-    std::cout << "Synchronize polytree to ModelPart " << r_model_part.Name() << std::endl;
-    ModelPart::NodesContainerType pNewNodes;
-    ModelPart::ElementsContainerType pNewElements;
-    rDummy.Synchronize(r_model_part, r_tree, pNewNodes, pNewElements);
-    std::cout << "Synchronize polytree to ModelPart " << r_model_part.Name() << " completed" << std::endl;
-    boost::python::list python_list;
-    python_list.append(pNewNodes);
-    python_list.append(pNewElements);
-    return python_list;
 }
 
 //////////////////////////////////////
@@ -350,7 +339,14 @@ void PolyFEMApplication_AddCustomUtilitiesToPython()
     ("PolyTreeSyncUtility", init<>())
     .def("InitializeHalfEdges", &PolyTreeSyncUtility_InitializeHalfEdges)
     .def("SetDeformed", &PolyTreeSyncUtility::SetDeformed<PolyTree2D>)
-    .def("Synchronize", &PolyTreeSyncUtility_Synchronize)
+    .def("BeginSynchronize", &PolyTreeSyncUtility::BeginSynchronize<PolyTree2D>)
+    .def("TransferNodalVariable", &PolyTreeSyncUtility::TransferNodalVariable<Variable<double> >)
+    .def("TransferNodalVariable", &PolyTreeSyncUtility::TransferNodalVariable<Variable<array_1d<double, 3> > >)
+    .def("EndSynchronize", &PolyTreeSyncUtility::EndSynchronize<PolyTree2D>)
+    .def("GetNewNodes", &PolyTreeSyncUtility::GetNewNodes)
+    .def("GetNewElements", &PolyTreeSyncUtility::GetNewElements)
+    .def("GetChangedElements", &PolyTreeSyncUtility::GetChangedElements)
+    .def("GetResurrectedElements", &PolyTreeSyncUtility::GetResurrectedElements)
     .def("QueryState", &PolyTreeSyncUtility::QueryState<PolyTree2D>)
     .def("ListModelPart", &PolyTreeSyncUtility::ListModelPart)
     .def("CompareForward", &PolyTreeSyncUtility::CompareForward<PolyTree2D>)

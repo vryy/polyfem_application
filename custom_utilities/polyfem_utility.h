@@ -315,8 +315,18 @@ public:
     {
         GeometryType::Pointer pGeometry;
 
-        if(nvertices == 5)
+        if(nvertices == 4)
+            pGeometry = GeometryType::Pointer( new Polygon< Node<3>, 4 >( GeometryType::PointsArrayType( 4, Node<3>() ) ) );
+        else if(nvertices == 5)
             pGeometry = GeometryType::Pointer( new Polygon< Node<3>, 5 >( GeometryType::PointsArrayType( 5, Node<3>() ) ) );
+        else if(nvertices == 6)
+            pGeometry = GeometryType::Pointer( new Polygon< Node<3>, 6 >( GeometryType::PointsArrayType( 6, Node<3>() ) ) );
+        else if(nvertices == 7)
+            pGeometry = GeometryType::Pointer( new Polygon< Node<3>, 7 >( GeometryType::PointsArrayType( 7, Node<3>() ) ) );
+        else if(nvertices == 8)
+            pGeometry = GeometryType::Pointer( new Polygon< Node<3>, 8 >( GeometryType::PointsArrayType( 8, Node<3>() ) ) );
+        else if(nvertices == 9)
+            pGeometry = GeometryType::Pointer( new Polygon< Node<3>, 9 >( GeometryType::PointsArrayType( 9, Node<3>() ) ) );
         else
             KRATOS_THROW_ERROR(std::logic_error, "Invalid number of vertices = ", nvertices)
 
