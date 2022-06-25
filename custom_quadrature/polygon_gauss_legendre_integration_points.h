@@ -67,7 +67,7 @@ public:
          double x1, x2, y1, y2;
          double N1, N2, N3;
          double dN1dXi, dN1dEta, dN2dXi, dN2dEta, dN3dXi, dN3dEta;
-         Matrix Jac(2, 2);
+         double J00, J01, J10, J11;
 
          for(unsigned int i = 0; i < TnVertices; ++i)
          {
@@ -95,12 +95,12 @@ public:
                  IntegrationPoint[1] = N1*0.0 + N2*y1 + N3*y2;
                  IntegrationPoint[2] = 0.0;
 
-                 Jac(0, 0) = dN1dXi*0.0 + dN2dXi*x1 + dN3dXi*x2;
-                 Jac(0, 1) = dN1dEta*0.0 + dN2dEta*x1 + dN3dEta*x2;
-                 Jac(1, 0) = dN1dXi*0.0 + dN2dXi*y1 + dN3dXi*y2;
-                 Jac(1, 1) = dN1dEta*0.0 + dN2dEta*y1 + dN3dEta*y2;
+                 J00 = dN1dXi*0.0 + dN2dXi*x1 + dN3dXi*x2;
+                 J01 = dN1dEta*0.0 + dN2dEta*x1 + dN3dEta*x2;
+                 J10 = dN1dXi*0.0 + dN2dXi*y1 + dN3dXi*y2;
+                 J11 = dN1dEta*0.0 + dN2dEta*y1 + dN3dEta*y2;
 
-                 IntegrationPoint.Weight() = MathUtils<double>::Det(Jac) * SampleIntegrationPoints[j].Weight();
+                 IntegrationPoint.Weight() = (J00*J11-J01*J10) * SampleIntegrationPoints[j].Weight();
 
                  ThisIntegrationPoints[i*SampleIntegrationPoints.size() + j] = IntegrationPoint;
              }
