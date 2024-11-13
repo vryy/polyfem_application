@@ -29,7 +29,6 @@
 #include <boost/python.hpp>
 #include <boost/python/stl_iterator.hpp>
 #include <boost/foreach.hpp>
-#include <boost/progress.hpp>
 
 #ifdef POLYFEM_USE_QHULL
 #include "libqhullcpp/RboxPoints.h"

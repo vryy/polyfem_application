@@ -27,7 +27,6 @@
 #include <boost/python.hpp>
 #include <boost/python/stl_iterator.hpp>
 #include <boost/foreach.hpp>
-#include <boost/progress.hpp>
 
 
 // Project includes
@@ -36,6 +35,7 @@
 #include "includes/model_part.h"
 #include "includes/deprecated_variables.h"
 #include "includes/kratos_flags.h"
+#include "utilities/progress.h"
 #include "custom_geometries/polygon.h"
 
 
@@ -153,7 +153,7 @@ public:
     {
         rpElements.clear();
 
-        boost::progress_display show_progress( element_list.size() );
+        Kratos::progress_display show_progress( element_list.size() );
 
         for(std::set<std::size_t>::iterator it = element_list.begin(); it != element_list.end(); ++it)
         {
