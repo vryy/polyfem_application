@@ -1,64 +1,23 @@
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
-
+message("")
 message("**** configuring KratosPolyFEMApplication ****")
 
-######### add include directory here
-include_directories( ${CMAKE_SOURCE_DIR}/external_libraries )
-include_directories( ${CMAKE_SOURCE_DIR}/kratos )
-include_directories( ${CMAKE_SOURCE_DIR}/applications )
-#######################################################################
-
-######### add additional cmake module path
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/custom_cmake_modules")
-#######################################################################
-
-FIND_PACKAGE(Qhull)
-
-if(${QHULL_FOUND} MATCHES TRUE)
-    message("Qhull is found: " ${QHULL_LIBRARIES})
-    message("Qhull reentrant is found: " ${QHULL_REENTRANT_LIBRARIES})
-    message("Qhull headers: " ${QHULL_HEADER})
-    message("Qhull include dir: " ${QHULL_INCLUDE_DIR})
-    include_directories(${QHULL_INCLUDE_DIR})
-    add_definitions(-DPOLYFEM_USE_QHULL)
+if(${CMAKE_SYSTEM_NAME} MATCHES "Android")
+    message("KratosPolyFEMApplication is compiled on Android")
+    include(${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists2.txt)
+else()
+    if((${PYTHON_VERSION_MAJOR} MATCHES "2") OR (${KRATOS_USE_BOOST_PYTHON} MATCHES ON))
+        if((${PYTHON_VERSION_MAJOR} MATCHES "3") AND (${KRATOS_USE_BOOST_PYTHON} MATCHES ON))
+            message("KratosPolyFEMApplication is compiled with Python 3 (Boost.Python)")
+        else()
+            message("KratosPolyFEMApplication is compiled with Python 2")
+        endif()
+        include(${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists2.txt)
+    elseif(${PYTHON_VERSION_MAJOR} MATCHES "3")
+        message(FATAL_ERROR "KratosPolyFEMApplication is not yet compilable with Python 3")
+    else()
+        message("KratosPolyFEMApplication does not detect the Python version")
+    endif()
 endif()
 
-## generate variables with the sources
-set( KRATOS_POLYFEM_APPLICATION_SOURCES     
-    ${CMAKE_CURRENT_SOURCE_DIR}/custom_quadrature/polygon_integration_rules.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/custom_utilities/polytree_2d.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/polyfem_application.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/custom_python/add_custom_utilities_to_python.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/custom_python/polyfem_python_application.cpp
-)
-
-
-###############################################################
-## define library Kratos which defines the basic python interface
-add_library(KratosPolyFEMApplication SHARED ${KRATOS_POLYFEM_APPLICATION_SOURCES})
-
-target_link_libraries(KratosPolyFEMApplication KratosCore)
-if(${QHULL_FOUND} MATCHES TRUE)
-    target_link_libraries(KratosPolyFEMApplication ${QHULL_REENTRANT_LIBRARIES})
-endif(${QHULL_FOUND} MATCHES TRUE)
-set_target_properties(KratosPolyFEMApplication PROPERTIES PREFIX "")
-install(TARGETS KratosPolyFEMApplication DESTINATION libs )
-
-# get_property(inc_dirs DIRECTORY PROPERTY INCLUDE_DIRECTORIES)
-# message("TestApplication subdir inc_dirs = ${inc_dirs}")
-
-# changing the .dll suffix to .pyd 
-if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-    set_target_properties(KratosPolyFEMApplication PROPERTIES SUFFIX .pyd)
-endif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-
-if(${INSTALL_PYTHON_FILES} MATCHES ON)
-  get_filename_component (CURRENT_DIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
-  install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python_scripts DESTINATION applications/${CURRENT_DIR_NAME}  FILES_MATCHING PATTERN "*.py"  PATTERN ".svn" EXCLUDE)
-endif(${INSTALL_PYTHON_FILES} MATCHES ON)
-
-# get_property(inc_dirs DIRECTORY PROPERTY INCLUDE_DIRECTORIES)
-# message("TestApplication subdir inc_dirs = ${inc_dirs}")
-
-# Add to the KratosMultiphysics Python module
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/PolyFEMApplication.py" DESTINATION KratosMultiphysics )
+message("**** finish configuring KratosPolyFEMApplication ****")
+message("")
