@@ -39,15 +39,64 @@ public:
 
     typedef IntegrationPointType::PointType PointType;
 
-    static SizeType IntegrationPointsNumber()
+    static constexpr SizeType IntegrationPointsNumber()
     {
         return TnVertices * TriangleIntegrationPoints::IntegrationPointsNumber();
     }
 
-    static IntegrationPointsArrayType& IntegrationPoints()
+    static const IntegrationPointsArrayType& IntegrationPoints()
     {
-        msIntegrationPoints = CreateIntegrationPoints();
-        return msIntegrationPoints;
+        static const auto ThisIntegrationPoints = []() -> IntegrationPointsArrayType
+        {
+            typename TriangleIntegrationPoints::IntegrationPointsArrayType SampleIntegrationPoints =
+                            TriangleIntegrationPoints::IntegrationPoints();
+
+            double x1, x2, y1, y2;
+            double N1, N2, N3;
+            double dN1dXi, dN1dEta, dN2dXi, dN2dEta, dN3dXi, dN3dEta;
+            double J00, J01, J10, J11;
+
+            IntegrationPointsArrayType IntegrationPoints;
+            for(unsigned int i = 0; i < TnVertices; ++i)
+            {
+                x1 = cos(2.0*M_PI*i/TnVertices);
+                y1 = sin(2.0*M_PI*i/TnVertices);
+                if(i != TnVertices-1)
+                {
+                    x2 = cos(2.0*M_PI*(i+1)/TnVertices);
+                    y2 = sin(2.0*M_PI*(i+1)/TnVertices);
+                }
+                else
+                {
+                    x2 = 1.0;
+                    y2 = 0.0;
+                }
+
+                for(unsigned int j = 0; j < SampleIntegrationPoints.size(); ++j)
+                {
+                    TriShape(N1, N2, N3, SampleIntegrationPoints[j]);
+                    TriGradient(dN1dXi, dN1dEta, dN2dXi, dN2dEta, dN3dXi, dN3dEta, SampleIntegrationPoints[j]);
+
+                    IntegrationPointType IntegrationPoint;
+
+                    IntegrationPoint[0] = N1*0.0 + N2*x1 + N3*x2;
+                    IntegrationPoint[1] = N1*0.0 + N2*y1 + N3*y2;
+                    IntegrationPoint[2] = 0.0;
+
+                    J00 = dN1dXi*0.0 + dN2dXi*x1 + dN3dXi*x2;
+                    J01 = dN1dEta*0.0 + dN2dEta*x1 + dN3dEta*x2;
+                    J10 = dN1dXi*0.0 + dN2dXi*y1 + dN3dXi*y2;
+                    J11 = dN1dEta*0.0 + dN2dEta*y1 + dN3dEta*y2;
+
+                    IntegrationPoint.Weight() = (J00*J11-J01*J10) * SampleIntegrationPoints[j].Weight();
+
+                    IntegrationPoints[i*SampleIntegrationPoints.size() + j] = IntegrationPoint;
+                }
+            }
+        }
+        (); // excecute the lambda in place
+
+        return ThisIntegrationPoints;
     }
 
     std::string Info() const
@@ -57,63 +106,7 @@ public:
         return buffer.str();
     }
 
-     static constexpr IntegrationPointsArrayType CreateIntegrationPoints()
-     {
-         IntegrationPointsArrayType ThisIntegrationPoints;
-
-         typename TriangleIntegrationPoints::IntegrationPointsArrayType SampleIntegrationPoints =
-             TriangleIntegrationPoints::IntegrationPoints();
-
-         double x1, x2, y1, y2;
-         double N1, N2, N3;
-         double dN1dXi, dN1dEta, dN2dXi, dN2dEta, dN3dXi, dN3dEta;
-         double J00, J01, J10, J11;
-
-         for(unsigned int i = 0; i < TnVertices; ++i)
-         {
-             x1 = cos(2.0*M_PI*i/TnVertices);
-             y1 = sin(2.0*M_PI*i/TnVertices);
-             if(i != TnVertices-1)
-             {
-                 x2 = cos(2.0*M_PI*(i+1)/TnVertices);
-                 y2 = sin(2.0*M_PI*(i+1)/TnVertices);
-             }
-             else
-             {
-                 x2 = 1.0;
-                 y2 = 0.0;
-             }
-
-             for(unsigned int j = 0; j < SampleIntegrationPoints.size(); ++j)
-             {
-                 TriShape(N1, N2, N3, SampleIntegrationPoints[j]);
-                 TriGradient(dN1dXi, dN1dEta, dN2dXi, dN2dEta, dN3dXi, dN3dEta, SampleIntegrationPoints[j]);
-
-                 IntegrationPointType IntegrationPoint;
-
-                 IntegrationPoint[0] = N1*0.0 + N2*x1 + N3*x2;
-                 IntegrationPoint[1] = N1*0.0 + N2*y1 + N3*y2;
-                 IntegrationPoint[2] = 0.0;
-
-                 J00 = dN1dXi*0.0 + dN2dXi*x1 + dN3dXi*x2;
-                 J01 = dN1dEta*0.0 + dN2dEta*x1 + dN3dEta*x2;
-                 J10 = dN1dXi*0.0 + dN2dXi*y1 + dN3dXi*y2;
-                 J11 = dN1dEta*0.0 + dN2dEta*y1 + dN3dEta*y2;
-
-                 IntegrationPoint.Weight() = (J00*J11-J01*J10) * SampleIntegrationPoints[j].Weight();
-
-                 ThisIntegrationPoints[i*SampleIntegrationPoints.size() + j] = IntegrationPoint;
-             }
-         }
-
-         return ThisIntegrationPoints;
-     }
-
-protected:
-
 private:
-
-    static IntegrationPointsArrayType msIntegrationPoints;    
 
     static void TriShape(double& N1, double& N2, double& N3, const IntegrationPointType& rPoint)
     {
@@ -137,17 +130,12 @@ private:
 ///@name Type Definitions
 ///@{
 
-
 ///@}
 ///@name Input and output
 ///@{
 
-
 ///@}
-
 
 }  // namespace Kratos.
 
-#endif // KRATOS_POLYGON_GAUSS_LEGENDRE_INTEGRATION_POINTS_H_INCLUDED  defined 
-
-
+#endif // KRATOS_POLYGON_GAUSS_LEGENDRE_INTEGRATION_POINTS_H_INCLUDED  defined

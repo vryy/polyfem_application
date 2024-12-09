@@ -188,9 +188,7 @@ public:
     {
         if ( this->PointsNumber() != TnVertices )
         {
-            std::stringstream ss;
-            ss << "Invalid points number. Expected " << TnVertices << ", given " << this->PointsNumber();
-            KRATOS_THROW_ERROR( std::invalid_argument, ss.str(), "" );
+            KRATOS_ERROR << "Invalid points number. Expected " << TnVertices << ", given " << this->PointsNumber();
         }
     }
 
@@ -228,50 +226,50 @@ public:
     /**
      * Destructor. Does nothing!!!
      */
-    virtual ~Polygon() {}
+    ~Polygon() override {}
 
-    GeometryData::KratosGeometryFamily GetGeometryFamily()
+    GeometryData::KratosGeometryFamily GetGeometryFamily() const override
     {
-        return GeometryData::Kratos_Polygon;
+        return GeometryData::KratosGeometryFamily::Kratos_Polygon;
     }
 
-    GeometryData::KratosGeometryType GetGeometryType()
+    GeometryData::KratosGeometryType GetGeometryType() const override
     {
         // REMARKS: naming convention for polygon: https://www.mathsisfun.com/geometry/polygons.html
         if(TnVertices == 3)
-            return GeometryData::Kratos_Tritagon;
+            return GeometryData::KratosGeometryType::Kratos_Tritagon;
         else if(TnVertices == 4)
-            return GeometryData::Kratos_Tetragon;
+            return GeometryData::KratosGeometryType::Kratos_Tetragon;
         else if(TnVertices == 5)
-            return GeometryData::Kratos_Pentagon;
+            return GeometryData::KratosGeometryType::Kratos_Pentagon;
         else if(TnVertices == 6)
-            return GeometryData::Kratos_Hexagon;
+            return GeometryData::KratosGeometryType::Kratos_Hexagon;
         else if(TnVertices == 7)
-            return GeometryData::Kratos_Heptagon;
+            return GeometryData::KratosGeometryType::Kratos_Heptagon;
         else if(TnVertices == 8)
-            return GeometryData::Kratos_Octagon;
+            return GeometryData::KratosGeometryType::Kratos_Octagon;
         else if(TnVertices == 9)
-            return GeometryData::Kratos_Nonagon;
+            return GeometryData::KratosGeometryType::Kratos_Nonagon;
         else if(TnVertices == 10)
-            return GeometryData::Kratos_Decagon;
+            return GeometryData::KratosGeometryType::Kratos_Decagon;
         else if(TnVertices == 11)
-            return GeometryData::Kratos_Hendecagon;
+            return GeometryData::KratosGeometryType::Kratos_Hendecagon;
         else if(TnVertices == 12)
-            return GeometryData::Kratos_Dodecagon;
+            return GeometryData::KratosGeometryType::Kratos_Dodecagon;
         else if(TnVertices == 13)
-            return GeometryData::Kratos_Triskaidecagon;
+            return GeometryData::KratosGeometryType::Kratos_Triskaidecagon;
         else if(TnVertices == 14)
-            return GeometryData::Kratos_Tetrakaidecagon;
+            return GeometryData::KratosGeometryType::Kratos_Tetrakaidecagon;
         else if(TnVertices == 15)
-            return GeometryData::Kratos_Pentadecagon;
+            return GeometryData::KratosGeometryType::Kratos_Pentadecagon;
         else if(TnVertices == 16)
-            return GeometryData::Kratos_Hexakaidecagon;
+            return GeometryData::KratosGeometryType::Kratos_Hexakaidecagon;
         else if(TnVertices == 17)
-            return GeometryData::Kratos_Heptadecagon;
+            return GeometryData::KratosGeometryType::Kratos_Heptadecagon;
         else if(TnVertices == 18)
-            return GeometryData::Kratos_Octakaidecagon;
+            return GeometryData::KratosGeometryType::Kratos_Octakaidecagon;
         else if(TnVertices == 19)
-            return GeometryData::Kratos_Enneadecagon;
+            return GeometryData::KratosGeometryType::Kratos_Enneadecagon;
     }
 
     ///@}
@@ -356,12 +354,12 @@ public:
             case 19:
                 return typename BaseType::Pointer( new Polygon<TPointType, 19>( ThisPoints ) );
             default:
-                KRATOS_THROW_ERROR(std::logic_error, ThisPoints.size(), "-gon geometry can't be created")
+                KRATOS_ERROR << ThisPoints.size() << "-gon geometry can't be created";
 //                return typename BaseType::Pointer( new Polygon( ThisPoints ) );
         }
     }
 
-    virtual Geometry< Point<3> >::Pointer Clone() const
+    Geometry< Point<3> >::Pointer Clone() const override
     {
         Geometry< Point<3> >::PointsArrayType NewPoints;
 
@@ -383,7 +381,7 @@ public:
      * @param rResult a Matrix object that will be overwritten by the result
      * @return the local coordinates of all nodes
      */
-    virtual Matrix& PointsLocalCoordinates( Matrix& rResult ) const
+    Matrix& PointsLocalCoordinates( Matrix& rResult ) const override
     {
         noalias( rResult ) = ZeroMatrix( TnVertices, 2 );
         // TODO
@@ -399,7 +397,7 @@ public:
     }
 
     //lumping factors for the calculation of the lumped mass matrix
-    virtual Vector& LumpingFactors( Vector& rResult ) const
+    Vector& LumpingFactors( Vector& rResult ) const override
     {
         if(rResult.size() != TnVertices)
             rResult.resize( TnVertices, false );
@@ -430,7 +428,7 @@ public:
      * :TODO: could be replaced by something more suitable
      * (comment by janosch)
      */
-    virtual double Length() const
+    double Length() const override
     {
         //return sqrt(fabs( DeterminantOfJacobian(PointType())));
         double length = 0.000;
@@ -454,7 +452,7 @@ public:
      * :TODO: could be replaced by something more suitable
      * (comment by janosch)
      */
-    virtual double Area() const
+    double Area() const override
     {
         // TODO check
         Vector temp;
@@ -485,7 +483,7 @@ public:
      * :TODO: could be replaced by something more suitable
      * (comment by janosch)
      */
-    virtual double DomainSize() const
+    double DomainSize() const override
     {
         return fabs( this->DeterminantOfJacobian( PointType() ) ) * 0.5;
     }
@@ -493,7 +491,7 @@ public:
     /**
      * Returns whether given arbitrary point is inside the Geometry
      */
-    virtual bool IsInside( const CoordinatesArrayType& rPoint, CoordinatesArrayType& rResult )
+    bool IsInside( const CoordinatesArrayType& rPoint, CoordinatesArrayType& rResult ) const override
     {
         this->PointLocalCoordinates( rResult, rPoint );
 
@@ -517,7 +515,7 @@ public:
     @see Edges()
     @see Edge()
     */
-    virtual SizeType EdgesNumber() const
+    SizeType EdgesNumber() const override
     {
         return TnVertices;
     }
@@ -533,7 +531,7 @@ public:
     @see EdgesNumber()
     @see Edge()
     */
-    virtual GeometriesArrayType Edges( void )
+    GeometriesArrayType Edges( void ) const override
     {
         GeometriesArrayType edges = GeometriesArrayType();
         for(unsigned int i = 0; i < TnVertices-1; ++i)
@@ -555,10 +553,10 @@ public:
      *
      * @return the value of the shape function at the given point
      */
-    virtual double ShapeFunctionValue( IndexType ShapeFunctionIndex,
-                                       const CoordinatesArrayType& rPoint ) const
+    double ShapeFunctionValue( IndexType ShapeFunctionIndex,
+                               const CoordinatesArrayType& rPoint ) const override
     {
-        KRATOS_THROW_ERROR(std::logic_error, __FUNCTION__, "is not supported")
+        KRATOS_ERROR << "Not yet implemented";
         return 0.0;
     }
 
@@ -629,7 +627,7 @@ public:
         return rResults;
     }
 
-    virtual Vector& ShapeFunctionsValues(Vector &rResults, const CoordinatesArrayType& rCoordinates) const
+    Vector& ShapeFunctionsValues(Vector &rResults, const CoordinatesArrayType& rCoordinates) const override
     {
         return ShapeFunctionsValuesImpl(rResults, rCoordinates);
     }
@@ -714,8 +712,8 @@ public:
         return rResult;
     }
 
-    virtual Matrix& ShapeFunctionsLocalGradients( Matrix& rResult,
-            const CoordinatesArrayType& rPoint ) const
+    Matrix& ShapeFunctionsLocalGradients( Matrix& rResult,
+                    const CoordinatesArrayType& rPoint ) const override
     {
         return ShapeFunctionsLocalGradientsImpl(rResult, rPoint);
     }
@@ -727,7 +725,8 @@ public:
      * @param rResult a third order tensor which contains the second derivatives
      * @param rPoint the given point the second order derivatives are calculated in
      */
-    virtual ShapeFunctionsSecondDerivativesType& ShapeFunctionsSecondDerivatives( ShapeFunctionsSecondDerivativesType& rResult, const CoordinatesArrayType& rPoint ) const
+    ShapeFunctionsSecondDerivativesType& ShapeFunctionsSecondDerivatives( ShapeFunctionsSecondDerivativesType& rResult,
+                     const CoordinatesArrayType& rPoint ) const override
     {
         if ( rResult.size() != this->PointsNumber() )
         {
@@ -741,7 +740,7 @@ public:
             rResult[i].resize( 2, 2 );
 
         // TODO
-        KRATOS_THROW_ERROR(std::logic_error, __FUNCTION__, " is yet implemented");
+        KRATOS_ERROR << "Not yet implemented";
 
         return rResult;
     }
@@ -752,7 +751,8 @@ public:
      * @param rResult a fourth order tensor which contains the third derivatives
      * @param rPoint the given point the third order derivatives are calculated in
      */
-    virtual ShapeFunctionsThirdDerivativesType& ShapeFunctionsThirdDerivatives( ShapeFunctionsThirdDerivativesType& rResult, const CoordinatesArrayType& rPoint ) const
+    ShapeFunctionsThirdDerivativesType& ShapeFunctionsThirdDerivatives( ShapeFunctionsThirdDerivativesType& rResult,
+                    const CoordinatesArrayType& rPoint ) const override
     {
         if ( rResult.size() != this->PointsNumber() )
         {
@@ -779,12 +779,12 @@ public:
         }
 
         // TODO
-        KRATOS_THROW_ERROR(std::logic_error, __FUNCTION__, " is yet implemented");
+        KRATOS_ERROR << "Not yet implemented";
 
         return rResult;
     }
 
-    virtual Matrix& Jacobian( Matrix& rResult, const CoordinatesArrayType& rCoordinates ) const
+    Matrix& Jacobian( Matrix& rResult, const CoordinatesArrayType& rCoordinates ) const override
     {
         if(rResult.size1() != this->WorkingSpaceDimension() || rResult.size2() != this->LocalSpaceDimension())
             rResult.resize( this->WorkingSpaceDimension(), this->LocalSpaceDimension(), false );
@@ -807,8 +807,8 @@ public:
         return rResult;
     }
 
-    virtual CoordinatesArrayType& PointLocalCoordinates( CoordinatesArrayType& rResult,
-            const CoordinatesArrayType& rPoint )
+    CoordinatesArrayType& PointLocalCoordinates( CoordinatesArrayType& rResult,
+                    const CoordinatesArrayType& rPoint, bool force_error = true ) const override
     {
         Matrix J = ZeroMatrix( this->LocalSpaceDimension(), this->LocalSpaceDimension() );
 
@@ -865,7 +865,7 @@ public:
             KRATOS_WATCH(J)
             KRATOS_WATCH(CurrentGlobalCoords)
             KRATOS_WATCH(rResult)
-            KRATOS_THROW_ERROR(std::logic_error, __FUNCTION__, " does not converge")
+            KRATOS_ERROR << "Does not converge";
         }
 
         return( rResult );
@@ -882,7 +882,7 @@ public:
      * @see PrintData()
      * @see PrintInfo()
      */
-    virtual std::string Info() const
+    std::string Info() const override
     {
         std::stringstream ss;
         ss << "2 dimensional polygon with " << TnVertices << " nodes in 2D space";
@@ -895,7 +895,7 @@ public:
      * @see PrintData()
      * @see Info()
      */
-    virtual void PrintInfo( std::ostream& rOStream ) const
+    void PrintInfo( std::ostream& rOStream ) const override
     {
         rOStream << "2 dimensional polygon with " << TnVertices << " nodes in 2D space";
     }
@@ -914,7 +914,7 @@ public:
      * :TODO: needs to be reviewed because it is not properly implemented yet
      * (comment by janosch)
      */
-    virtual void PrintData( std::ostream& rOStream ) const
+    void PrintData( std::ostream& rOStream ) const override
     {
         BaseType::PrintData( rOStream );
         std::cout << std::endl;
@@ -950,12 +950,12 @@ private:
 
     friend class Serializer;
 
-    virtual void save( Serializer& rSerializer ) const
+    void save( Serializer& rSerializer ) const override
     {
         KRATOS_SERIALIZE_SAVE_BASE_CLASS( rSerializer, PointsArrayType );
     }
 
-    virtual void load( Serializer& rSerializer )
+    void load( Serializer& rSerializer ) override
     {
         KRATOS_SERIALIZE_LOAD_BASE_CLASS( rSerializer, PointsArrayType );
     }
@@ -988,7 +988,7 @@ private:
         IntegrationPointsContainerType all_integration_points =
             AllIntegrationPoints();
         IntegrationPointsArrayType integration_points =
-            all_integration_points[ThisMethod];
+            all_integration_points[static_cast<int>(ThisMethod)];
         //number of integration points
         const int integration_points_number = integration_points.size();
         //number of nodes in current geometry
@@ -1019,14 +1019,13 @@ private:
      * @return the vector of the gradients of all shape functions
      * in each integration point
      */
-    static ShapeFunctionsGradientsType
-    CalculateShapeFunctionsIntegrationPointsLocalGradients(
+    static ShapeFunctionsGradientsType CalculateShapeFunctionsIntegrationPointsLocalGradients(
         typename BaseType::IntegrationMethod ThisMethod )
     {
         IntegrationPointsContainerType all_integration_points =
             AllIntegrationPoints();
         IntegrationPointsArrayType integration_points =
-            all_integration_points[ThisMethod];
+            all_integration_points[static_cast<int>(ThisMethod)];
         //number of integration points
         const int integration_points_number = integration_points.size();
         ShapeFunctionsGradientsType d_shape_f_values( integration_points_number );
@@ -1069,10 +1068,10 @@ private:
         ShapeFunctionsValuesContainerType shape_functions_values =
         {
             {
-                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsValues( GeometryData::GI_GAUSS_1 ),
-                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsValues( GeometryData::GI_GAUSS_2 ),
-                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsValues( GeometryData::GI_GAUSS_3 ),
-                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsValues( GeometryData::GI_GAUSS_4 )
+                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsValues( GeometryData::IntegrationMethod::GI_GAUSS_1 ),
+                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsValues( GeometryData::IntegrationMethod::GI_GAUSS_2 ),
+                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsValues( GeometryData::IntegrationMethod::GI_GAUSS_3 ),
+                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsValues( GeometryData::IntegrationMethod::GI_GAUSS_4 )
             }
         };
         return shape_functions_values;
@@ -1086,10 +1085,10 @@ private:
         ShapeFunctionsLocalGradientsContainerType shape_functions_local_gradients =
         {
             {
-                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsLocalGradients( GeometryData::GI_GAUSS_1 ),
-                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsLocalGradients( GeometryData::GI_GAUSS_2 ),
-                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsLocalGradients( GeometryData::GI_GAUSS_3 ),
-                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsLocalGradients( GeometryData::GI_GAUSS_4 )
+                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsLocalGradients( GeometryData::IntegrationMethod::GI_GAUSS_1 ),
+                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsLocalGradients( GeometryData::IntegrationMethod::GI_GAUSS_2 ),
+                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsLocalGradients( GeometryData::IntegrationMethod::GI_GAUSS_3 ),
+                Polygon<TPointType, TnVertices>::CalculateShapeFunctionsIntegrationPointsLocalGradients( GeometryData::IntegrationMethod::GI_GAUSS_4 )
             }
         };
         return shape_functions_local_gradients;
@@ -1127,36 +1126,18 @@ private:
 ///@}
 ///@name Input and output
 ///@{
-/**
- * input stream functions
- */
-template<class TPointType, std::size_t TnVertices> inline std::istream& operator >> (
-    std::istream& rIStream,
-    Polygon<TPointType, TnVertices>& rThis );
-/**
- * output stream functions
- */
-template<class TPointType, std::size_t TnVertices> inline std::ostream& operator << (
-    std::ostream& rOStream,
-    const Polygon<TPointType, TnVertices>& rThis )
-{
-    rThis.PrintInfo( rOStream );
-    rOStream << std::endl;
-    rThis.PrintData( rOStream );
-    return rOStream;
-}
+
 
 ///@}
 
 template<class TPointType, std::size_t TnVertices> const
 GeometryData Polygon<TPointType, TnVertices>::msGeometryData(
     2, 2, 2,
-    GeometryData::GI_GAUSS_2,
+    GeometryData::IntegrationMethod::GI_GAUSS_2,
     Polygon<TPointType, TnVertices>::AllIntegrationPoints(),
     Polygon<TPointType, TnVertices>::AllShapeFunctionsValues(),
     Polygon<TPointType, TnVertices>::AllShapeFunctionsLocalGradients()
 );
 }// namespace Kratos.
 
-#endif // KRATOS_POLYGON_H_INCLUDED  defined 
-
+#endif // KRATOS_POLYGON_H_INCLUDED  defined

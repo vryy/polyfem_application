@@ -12,11 +12,9 @@
 
 // External includes
 #if defined(KRATOS_PYTHON)
-#include <boost/python.hpp>
-
 
 // Project includes
-#include "includes/define.h"
+#include "includes/define_python.h"
 #include "polyfem_application.h"
 #include "custom_python/add_custom_utilities_to_python.h"
 
@@ -26,9 +24,10 @@ namespace Kratos
 namespace Python
 {
 
-    using namespace boost::python;
     BOOST_PYTHON_MODULE(KratosPolyFEMApplication)
     {
+
+        using namespace boost::python;
 
         class_<KratosPolyFEMApplication, KratosPolyFEMApplication::Pointer,
                bases<KratosApplication>, boost::noncopyable>
@@ -46,4 +45,3 @@ namespace Python
 } // namespace Kratos.
 
 #endif // KRATOS_PYTHON
-

@@ -213,7 +213,7 @@ public:
         const std::size_t& Id, Properties::Pointer pProperties, const std::vector<std::size_t>& node_ids)
     {
         if(!KratosComponents<Condition>::Has(sample_cond_name))
-            KRATOS_THROW_ERROR(std::logic_error, sample_cond_name, "is not registered to the KRATOS kernel")
+            KRATOS_ERROR << sample_cond_name << " is not registered to the KRATOS kernel";
         Condition const& r_clone_condition = KratosComponents<Condition>::Get(sample_cond_name);
 //        KRATOS_WATCH(r_clone_condition)
 
@@ -328,7 +328,7 @@ public:
         else if(nvertices == 9)
             pGeometry = GeometryType::Pointer( new Polygon< Node<3>, 9 >( GeometryType::PointsArrayType( 9, Node<3>() ) ) );
         else
-            KRATOS_THROW_ERROR(std::logic_error, "Invalid number of vertices = ", nvertices)
+            KRATOS_ERROR << "Invalid number of vertices " << nvertices;
 
         GeometryType::CoordinatesArrayType Point;
         Point[0] = xi;
@@ -352,17 +352,17 @@ public:
         if(nvertices == 5)
             pGeometry = GeometryType::Pointer( new Polygon< Node<3>, 5 >( GeometryType::PointsArrayType( 5, Node<3>() ) ) );
         else
-            KRATOS_THROW_ERROR(std::logic_error, "Invalid number of vertices = ", nvertices)
+            KRATOS_ERROR << "Invalid number of vertices " << nvertices;
 
         GeometryData::IntegrationMethod ThisIntegrationMethod;
         if(quadrature_rule == 1)
-            ThisIntegrationMethod = GeometryData::GI_GAUSS_1;
+            ThisIntegrationMethod = GeometryData::IntegrationMethod::GI_GAUSS_1;
         if(quadrature_rule == 2)
-            ThisIntegrationMethod = GeometryData::GI_GAUSS_2;
+            ThisIntegrationMethod = GeometryData::IntegrationMethod::GI_GAUSS_2;
         if(quadrature_rule == 3)
-            ThisIntegrationMethod = GeometryData::GI_GAUSS_3;
+            ThisIntegrationMethod = GeometryData::IntegrationMethod::GI_GAUSS_3;
         if(quadrature_rule == 4)
-            ThisIntegrationMethod = GeometryData::GI_GAUSS_4;
+            ThisIntegrationMethod = GeometryData::IntegrationMethod::GI_GAUSS_4;
 
         std::cout << "quadrature listing for quadrature " << ThisIntegrationMethod << std::endl;
 
