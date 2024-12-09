@@ -25,7 +25,7 @@ endif()
 
 ## generate variables with the sources
 set( KRATOS_POLYFEM_APPLICATION_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/custom_quadrature/polygon_integration_rules.cpp
+    # ${CMAKE_CURRENT_SOURCE_DIR}/custom_quadrature/polygon_integration_rules.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/custom_utilities/polytree_2d.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/polyfem_application.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/custom_python/add_custom_utilities_to_python.cpp
@@ -42,6 +42,7 @@ if(${QHULL_FOUND} MATCHES TRUE)
     target_link_libraries(KratosPolyFEMApplication ${QHULL_REENTRANT_LIBRARIES})
 endif(${QHULL_FOUND} MATCHES TRUE)
 set_target_properties(KratosPolyFEMApplication PROPERTIES PREFIX "")
+set_target_properties(KratosPolyFEMApplication PROPERTIES COMPILE_DEFINITIONS "POLYFEM_APPLICATION=EXPORT,API")
 install(TARGETS KratosPolyFEMApplication DESTINATION libs )
 
 # get_property(inc_dirs DIRECTORY PROPERTY INCLUDE_DIRECTORIES)

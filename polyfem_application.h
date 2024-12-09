@@ -33,8 +33,8 @@ namespace Kratos
     ///@{
 
     // Variables definition
-    KRATOS_DEFINE_VARIABLE(int, POLYTREE_DEBUG_LEVEL)
-    KRATOS_DEFINE_VARIABLE(double, MERGE_PARAMETER)
+    KRATOS_DEFINE_APPLICATION_VARIABLE(POLYFEM_APPLICATION, int, POLYTREE_DEBUG_LEVEL)
+    KRATOS_DEFINE_APPLICATION_VARIABLE(POLYFEM_APPLICATION, double, MERGE_PARAMETER)
 
     ///@}
     ///@name Type Definitions
@@ -55,7 +55,7 @@ namespace Kratos
     /// Short class definition.
     /** Detail class definition.
     */
-    class KratosPolyFEMApplication : public KratosApplication
+    class KRATOS_API(POLYFEM_APPLICATION) KratosPolyFEMApplication : public KratosApplication
     {
     public:
         ///@name Type Definitions
@@ -72,7 +72,7 @@ namespace Kratos
         KratosPolyFEMApplication();
 
         /// Destructor.
-        virtual ~KratosPolyFEMApplication() {}
+        ~KratosPolyFEMApplication() override {}
 
         ///@}
         ///@name Operators
@@ -83,7 +83,7 @@ namespace Kratos
         ///@name Operations
         ///@{
 
-        virtual void Register();
+        void Register() override;
 
         ///@}
         ///@name Access
@@ -100,20 +100,20 @@ namespace Kratos
         ///@{
 
         /// Turn back information as a string.
-        virtual std::string Info() const
+        std::string Info() const override
         {
             return "Application for polygonal Finite Element Method";
         }
 
         /// Print information about this object.
-        virtual void PrintInfo(std::ostream& rOStream) const
+        void PrintInfo(std::ostream& rOStream) const override
         {
             rOStream << Info();
             PrintData(rOStream);
         }
 
         ///// Print object's data.
-        virtual void PrintData(std::ostream& rOStream) const
+        void PrintData(std::ostream& rOStream) const override
         {
             rOStream << "in KratosPolyFEMApplication:";
             KRATOS_WATCH(KratosComponents<VariableData>::GetComponents().size());
@@ -235,4 +235,3 @@ namespace Kratos
 } // namespace Kratos
 
 #endif // KRATOS_POLYFEM_APPLICATION_H_INCLUDED defined
-
