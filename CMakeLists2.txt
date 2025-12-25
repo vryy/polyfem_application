@@ -1,13 +1,3 @@
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
-
-message("**** configuring KratosPolyFEMApplication ****")
-
-######### add include directory here
-include_directories( ${CMAKE_SOURCE_DIR}/external_libraries )
-include_directories( ${CMAKE_SOURCE_DIR}/kratos )
-include_directories( ${CMAKE_SOURCE_DIR}/applications )
-#######################################################################
-
 ######### add additional cmake module path
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/custom_cmake_modules")
 #######################################################################
@@ -32,17 +22,16 @@ set( KRATOS_POLYFEM_APPLICATION_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/custom_python/polyfem_python_application.cpp
 )
 
-
 ###############################################################
 ## define library Kratos which defines the basic python interface
 add_library(KratosPolyFEMApplication SHARED ${KRATOS_POLYFEM_APPLICATION_SOURCES})
 
-target_link_libraries(KratosPolyFEMApplication KratosCore)
+target_link_libraries(KratosPolyFEMApplication PUBLIC KratosCore)
 if(${QHULL_FOUND} MATCHES TRUE)
-    target_link_libraries(KratosPolyFEMApplication ${QHULL_REENTRANT_LIBRARIES})
+    target_link_libraries(KratosPolyFEMApplication PUBLIC ${QHULL_REENTRANT_LIBRARIES})
 endif(${QHULL_FOUND} MATCHES TRUE)
+target_compile_definitions(KratosPolyFEMApplication PRIVATE KRATOS_CORE=IMPORT POLYFEM_APPLICATION=EXPORT)
 set_target_properties(KratosPolyFEMApplication PROPERTIES PREFIX "")
-set_target_properties(KratosPolyFEMApplication PROPERTIES COMPILE_DEFINITIONS "POLYFEM_APPLICATION=EXPORT,API")
 install(TARGETS KratosPolyFEMApplication DESTINATION libs )
 
 # get_property(inc_dirs DIRECTORY PROPERTY INCLUDE_DIRECTORIES)
