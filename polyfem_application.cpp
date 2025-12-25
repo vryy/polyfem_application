@@ -32,8 +32,6 @@ namespace Kratos
     // register the application to the Kratos kernel
     void KratosPolyFEMApplication::Register()
     {
-        // calling base class register to register Kratos components
-        KratosApplication::Register();
         std::cout << "Initializing KratosPolyFEMApplication... " << std::endl;
 
         // register variable
