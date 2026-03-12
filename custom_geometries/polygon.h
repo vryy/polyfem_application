@@ -82,7 +82,7 @@ public:
     /**
      * Redefinition of template parameter TPointType.
      */
-    typedef TPointType PointType;
+    typedef typename BaseType::PointType PointType;
 
     /**
      * Type used for indexing in geometry class.
@@ -99,6 +99,16 @@ public:
      */
     typedef typename BaseType::SizeType SizeType;
 
+    /** Type used to represent the coordinate, althought it is called DataType
+     * It should be called CoordinateType, but many downstream geometries depend
+     * on this type, I will leave it for now.
+     */
+    typedef typename BaseType::DataType DataType;
+
+    /** Type used to represent the real values, like shape function
+     */
+    typedef typename BaseType::ValueType ValueType;
+
     /**
      * Array of counted pointers to point.
      * This type used to hold geometry's points.
@@ -109,6 +119,11 @@ public:
      * Array of coordinates. Can be Nodes, Points or IntegrationPoints
      */
     typedef typename BaseType::CoordinatesArrayType CoordinatesArrayType;
+
+    /** This type used for representing the local coordinates of
+    an integration point
+    */
+    typedef typename BaseType::LocalCoordinatesArrayType LocalCoordinatesArrayType;
 
     /**
      * This type used for representing an integration point in geometry.
@@ -489,21 +504,17 @@ public:
     }
 
     /**
-     * Returns whether given arbitrary point is inside the Geometry
+     * Returns whether given local point is inside the Geometry
      */
-    bool IsInside( const CoordinatesArrayType& rPoint, CoordinatesArrayType& rResult ) const override
+    bool IsInside( const LocalCoordinatesArrayType& rPoint, const ValueType tol ) const override
     {
-        this->PointLocalCoordinates( rResult, rPoint );
-
         // this is a rough check. Instead of that we must check if the point lying inside the regular polygon
         // TODO improve this criteria
-        if ( sqrt( pow(rResult[0], 2) + pow(rResult[1], 2) ) < 1.0 )
+        if ( sqrt( pow(rPoint[0], 2) + pow(rPoint[1], 2) ) < 1.0 )
             return true;
 
         return false;
     }
-
-
 
     /** This method gives you number of all edges of this
     geometry. This method will gives you number of all the edges
@@ -718,7 +729,6 @@ public:
         return ShapeFunctionsLocalGradientsImpl(rResult, rPoint);
     }
 
-
     /**
      * returns the second order derivatives of all shape functions
      * in given arbitrary pointers
@@ -782,93 +792,6 @@ public:
         KRATOS_ERROR << "Not yet implemented";
 
         return rResult;
-    }
-
-    Matrix& Jacobian( Matrix& rResult, const CoordinatesArrayType& rCoordinates ) const override
-    {
-        if(rResult.size1() != this->WorkingSpaceDimension() || rResult.size2() != this->LocalSpaceDimension())
-            rResult.resize( this->WorkingSpaceDimension(), this->LocalSpaceDimension(), false );
-
-        Matrix shape_functions_gradients(this->PointsNumber(), this->LocalSpaceDimension());
-        ShapeFunctionsLocalGradients( shape_functions_gradients, rCoordinates );
-
-        rResult.clear();
-        for ( unsigned int i = 0; i < this->PointsNumber(); i++ )
-        {
-            for(unsigned int k=0; k<this->WorkingSpaceDimension(); k++)
-            {
-                for(unsigned int m=0; m<this->LocalSpaceDimension(); m++)
-                {
-                    rResult(k,m) += (( *this )[i]).Coordinates()[k]*shape_functions_gradients(i,m);
-                }
-            }
-        }
-
-        return rResult;
-    }
-
-    CoordinatesArrayType& PointLocalCoordinates( CoordinatesArrayType& rResult,
-                    const CoordinatesArrayType& rPoint, bool force_error = true ) const override
-    {
-        Matrix J = ZeroMatrix( this->LocalSpaceDimension(), this->LocalSpaceDimension() );
-
-        if ( rResult.size() != this->LocalSpaceDimension() )
-            rResult.resize( this->LocalSpaceDimension(), false );
-
-        //starting with xi = 0
-        rResult = ZeroVector( this->LocalSpaceDimension() );
-
-        Vector DeltaXi = ZeroVector( this->LocalSpaceDimension() );
-
-        CoordinatesArrayType CurrentGlobalCoords( ZeroVector( 3 ) );
-
-        //Newton iteration:
-        const double tol = 1.0e-8;
-        const double diverged_tol = 30.0;
-
-        int k, maxiter = 1000;
-        bool converged = false;
-
-        for ( k = 0; k < maxiter; k++ )
-        {
-            CurrentGlobalCoords = ZeroVector( 3 );
-            this->GlobalCoordinates( CurrentGlobalCoords, rResult );
-//            KRATOS_WATCH(CurrentGlobalCoords)
-            noalias( CurrentGlobalCoords ) = rPoint - CurrentGlobalCoords;
-//            std::cout << " residual: " << CurrentGlobalCoords << std::endl;
-
-            if ( MathUtils<double>::Norm3( CurrentGlobalCoords ) < tol )
-            {
-                converged = true;
-                break;
-            }
-
-            this->InverseOfJacobian( J, rResult );
-            noalias( DeltaXi ) = prod( J, CurrentGlobalCoords );
-            noalias( rResult ) += DeltaXi;
-//            std::cout << " InvJ: " << J << std::endl;
-//            std::cout << " DeltaXi: " << DeltaXi << std::endl;
-//            std::cout << " rResult: " << rResult << std::endl;
-
-            if ( MathUtils<double>::Norm3( DeltaXi ) > diverged_tol )
-            {
-                converged = false;
-                break;
-            }
-        }
-
-        if (!converged)
-        {
-            KRATOS_WATCH(rPoint)
-            for (unsigned int i = 0; i < this->size(); ++i)
-                std::cout << " " << (*this)[i].X() << " " << (*this)[i].Y() << std::endl;
-            KRATOS_WATCH(J)
-            KRATOS_WATCH(CurrentGlobalCoords)
-            KRATOS_WATCH(rResult)
-            KRATOS_ERROR << "Does not converge";
-        }
-
-        return( rResult );
     }
 
     ///@}
