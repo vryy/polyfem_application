@@ -251,7 +251,7 @@ public:
             mpNode2 = pEdges.back()->pNode2();
         }
         else
-            KRATOS_THROW_ERROR(std::logic_error, "Number of given sub-edges is zero", "")
+            KRATOS_ERROR << "Number of given sub-edges is zero";
     }
 
     const std::size_t& Id1() const {return pNode1()->Id();}
@@ -320,7 +320,7 @@ public:
     {
         if (IsComposite() || pEdge->IsComposite())
         {
-            KRATOS_THROW_ERROR(std::logic_error, "One of the edge is composite. It's not allowed to check collinearity of the composite edge with other.", "")
+            KRATOS_ERROR << "One of the edge is composite. It's not allowed to check collinearity of the composite edge with other.";
             return false;
         }
         else
