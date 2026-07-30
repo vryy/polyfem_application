@@ -235,9 +235,8 @@ public:
 
     std::size_t HashCode() const
     {
-//        std::hash<EdgeType> hasher;
-//        return hasher(*this);
-        return this->operator()(*this);
+        PolyHash<TDim> hasher;
+        return hasher.operator()(*this);
     }
 
     void SetSubEdges(std::vector<EdgeType::Pointer>& pEdges)
