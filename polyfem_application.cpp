@@ -27,6 +27,7 @@ namespace Kratos
 
     // constructor
     KratosPolyFEMApplication::KratosPolyFEMApplication()
+    : KratosApplication("PolyFEMApplication")
     {}
 
     // register the application to the Kratos kernel
@@ -40,4 +41,3 @@ namespace Kratos
     }
 
 } // namespace Kratos
-

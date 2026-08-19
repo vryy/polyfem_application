@@ -52,16 +52,12 @@ namespace Kratos
     ///@name Kratos Classes
     ///@{
 
-    /// Short class definition.
-    /** Detail class definition.
-    */
     class KRATOS_API(POLYFEM_APPLICATION) KratosPolyFEMApplication : public KratosApplication
     {
     public:
         ///@name Type Definitions
         ///@{
 
-        /// Pointer definition of KratosMultiphaseApplication
         KRATOS_CLASS_POINTER_DEFINITION(KratosPolyFEMApplication);
 
         ///@}
@@ -126,7 +122,6 @@ namespace Kratos
             rOStream << "Conditions:" << std::endl;
             KratosComponents<Condition>().PrintData(rOStream);
         }
-
 
         ///@}
         ///@name Friends
@@ -206,13 +201,11 @@ namespace Kratos
         ///@name Un accessible methods
         ///@{
 
-
         /// Assignment operator.
         KratosPolyFEMApplication& operator=(KratosPolyFEMApplication const& rOther);
 
         /// Copy constructor.
         KratosPolyFEMApplication(KratosPolyFEMApplication const& rOther);
-
 
         ///@}
 
@@ -230,7 +223,6 @@ namespace Kratos
     ///@{
 
     ///@}
-
 
 } // namespace Kratos
 
